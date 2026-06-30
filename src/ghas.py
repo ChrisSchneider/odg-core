@@ -162,6 +162,18 @@ def get_secret_alerts(
     github_hostname: str,
     org: str,
     secret_factory: secret_mgmt.SecretFactory,
+    secret_types: tuple[str, ...] = (
+        'ec_private_key',
+        'generic_private_key',
+        'http_basic_authentication_header',
+        'http_bearer_authentication_header',
+        'mongodb_connection_string',
+        'mysql_connection_url',
+        'openssh_private_key',
+        'pgp_private_key',
+        'postgres_connection_string',
+        'rsa_private_key',
+    ),  # https://docs.github.com/en/code-security/reference/secret-security/supported-secret-scanning-patterns#supported-generic-patterns
 ) -> collections.abc.Generator[SecretAlert]:
     """
     Fetch open secret scanning alerts using authenticated GitHub client.
@@ -171,12 +183,31 @@ def get_secret_alerts(
     )
 
     count = 0
+    seen_urls = set()
+
+    # default alerts
     for alert_raw in github_api_request_paginated(
         url=url,
         secret_factory=secret_factory,
     ):
         count += 1
-        yield dacite.from_dict(SecretAlert, alert_raw)
+        alert = dacite.from_dict(SecretAlert, alert_raw)
+        yield alert
+        seen_urls.add(alert.url)
+
+    # generic alerts
+    url = f'{url}&secret_type={",".join(secret_types)}'
+
+    for alert_raw in github_api_request_paginated(
+        url=url,
+        secret_factory=secret_factory,
+    ):
+        alert = dacite.from_dict(SecretAlert, alert_raw)
+        if alert.url not in seen_urls:
+            # deduplicating, as we are effectively quering the same data source twice
+            seen_urls.add(alert.url)
+            yield alert
+            count += 1
 
     logger.info(f'found {count} secret alerts for {github_hostname}/{org}')
 
@@ -442,13 +473,6 @@ def scan(
 
     now = datetime.datetime.now(tz=datetime.timezone.utc)
 
-    all_existing_metadata = [
-        odg.model.ArtefactMetadata.from_dict(raw)
-        for raw in delivery_service_client.query_metadata(
-            type=odg.model.Datatype.GHAS_FINDING,
-        )
-    ]
-
     for finding in create_ghas_findings(
         ghas_config=ghas_config,
         ghas_finding_cfg=ghas_finding_cfg,
@@ -481,6 +505,13 @@ def scan(
 
         all_metadata.extend(metadata)
         all_metadata_keys.update([metadatum.key for metadatum in metadata])
+
+    all_existing_metadata = [
+        odg.model.ArtefactMetadata.from_dict(raw)
+        for raw in delivery_service_client.query_metadata(
+            type=odg.model.Datatype.GHAS_FINDING,
+        )
+    ]
 
     all_stale_metadata = [
         metadatum for metadatum in all_existing_metadata if metadatum.key not in all_metadata_keys
