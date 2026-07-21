@@ -38,13 +38,14 @@ class Datatype(enum.StrEnum):
     SLA_VIOLATION = 'sla_violation'
 
     # finding types
+    CODEQL_FINDING = 'finding/codeql'
     CRYPTO_FINDING = 'finding/crypto'
     DIKI_FINDING = 'finding/diki'
     FALCO_FINDING = 'finding/falco'
-    KYVERNO_FINDING = 'finding/kyverno'
     GHAS_FINDING = 'finding/ghas'
     INVENTORY_FINDING = 'finding/inventory'
     IP_FINDING = 'finding/ip'
+    KYVERNO_FINDING = 'finding/kyverno'
     LICENSE_FINDING = 'finding/license'
     MALWARE_FINDING = 'finding/malware'
     OSID_FINDING = 'finding/osid'
@@ -58,13 +59,14 @@ class Datatype(enum.StrEnum):
 
     def datasource(self) -> 'Datasource':
         return {
+            Datatype.CODEQL_FINDING: Datasource.CODEQL,
             Datatype.CRYPTO_FINDING: Datasource.CRYPTO,
             Datatype.DIKI_FINDING: Datasource.DIKI,
             Datatype.FALCO_FINDING: Datasource.FALCO,
-            Datatype.KYVERNO_FINDING: Datasource.KYVERNO,
             Datatype.GHAS_FINDING: Datasource.GHAS,
             Datatype.INVENTORY_FINDING: Datasource.INVENTORY,
             Datatype.IP_FINDING: Datasource.BLACKDUCK,
+            Datatype.KYVERNO_FINDING: Datasource.KYVERNO,
             Datatype.LICENSE_FINDING: Datasource.BDBA,
             Datatype.MALWARE_FINDING: Datasource.CLAMAV,
             Datatype.OSID_FINDING: Datasource.OSID,
@@ -81,6 +83,7 @@ class Datasource(enum.StrEnum):
     BDBA = 'bdba'
     BLACKDUCK = 'blackduck'
     CLAMAV = 'clamav'
+    CODEQL = 'codeql'
     CRYPTO = 'crypto'
     DELIVERY_DASHBOARD = 'delivery-dashboard'
     DIKI = 'diki'
@@ -104,6 +107,7 @@ class Datasource(enum.StrEnum):
                 Datatype.VULNERABILITY_FINDING,
             ),
             Datasource.CLAMAV: (Datatype.MALWARE_FINDING,),
+            Datasource.CODEQL: (Datatype.CODEQL_FINDING,),
             Datasource.CRYPTO: (
                 Datatype.CRYPTO_FINDING,
                 Datatype.CRYPTO_ASSET,
@@ -605,6 +609,32 @@ class RescoreSastFinding:
         return _as_key(self.sast_status, self.sub_type)
 
 
+class CodeqlStatus(enum.StrEnum):
+    NOT_ENABLED = 'not-enabled'
+
+
+@dataclasses.dataclass
+class CodeqlFinding(Finding):
+    codeql_status: CodeqlStatus
+    repo_url: str
+    language: str
+
+    @property
+    def key(self) -> str:
+        return _as_key(self.codeql_status, self.repo_url, self.language)
+
+
+@dataclasses.dataclass
+class RescoreCodeqlFinding:
+    codeql_status: CodeqlStatus
+    repo_url: str
+    language: str
+
+    @property
+    def key(self) -> str:
+        return _as_key(self.codeql_status, self.repo_url, self.language)
+
+
 @dataclasses.dataclass
 class OsIdFinding(Finding):
     osid: OperatingSystemId
@@ -937,6 +967,7 @@ class CustomRescoring:
         | RescoringLicenseFinding
         | MalwareFindingDetails
         | RescoreSastFinding
+        | RescoreCodeqlFinding
         | RescoringCryptoFinding
         | RescoringDikiFinding
         | RescoreOsIdFinding
@@ -973,6 +1004,7 @@ class SlaViolation:
         | RescoringLicenseFinding
         | MalwareFindingDetails
         | RescoreSastFinding
+        | RescoreCodeqlFinding
         | RescoringCryptoFinding
         | RescoringDikiFinding
         | RescoreOsIdFinding
@@ -1647,6 +1679,7 @@ class ArtefactMetadataSpecificity(enum.Enum):
 
 FindingModels = (
     ClamAVMalwareFinding
+    | CodeqlFinding
     | CryptoFinding
     | DikiFinding
     | FalcoFinding

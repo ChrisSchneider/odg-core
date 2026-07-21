@@ -73,6 +73,10 @@ findings_report:
 ghas:
   enabled: False
 
+codeql:
+  enabled: False
+  languages: []  # optional list of languages to exclude from checks, e.g. [yaml, dockerfile]
+
 issue_replicator:
   enabled: False
   mappings:
