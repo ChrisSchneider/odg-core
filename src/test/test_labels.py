@@ -189,7 +189,34 @@ def test_deserialise_package_version_hint_label():
 
 
 # ---------------------------------------------------------------------------
-# CveCategorisationLabel
+# RiskProfileLabel
+# ---------------------------------------------------------------------------
+
+def test_deserialise_risk_profile_label():
+    label = _make_label(
+        name='security.ocm.software/risk-profile',
+        value={
+            'network_exposure': 'public',
+            'authentication_enforced': True,
+            'user_interaction': 'gardener-operator',
+            'confidentiality_requirement': 'high',
+            'integrity_requirement': 'high',
+            'availability_requirement': 'low',
+            'comment': 'internet-facing service',
+        },
+    )
+    result = odg.labels.deserialise_label(label)
+    assert isinstance(result, odg.labels.RiskProfileLabel)
+    categorisation = result.value
+    assert isinstance(categorisation, odg.cvss.CveCategorisation)
+    assert categorisation.authentication_enforced is True
+    assert categorisation.availability_requirement is odg.cvss.CVENoneLowHigh.LOW
+    assert categorisation.confidentiality_requirement is odg.cvss.CVENoneLowHigh.HIGH
+    assert categorisation.comment == 'internet-facing service'
+
+
+# ---------------------------------------------------------------------------
+# RiskProfileLabel — legacy label name (backwards compat)
 # ---------------------------------------------------------------------------
 
 def test_deserialise_cve_categorisation_label():
@@ -206,7 +233,7 @@ def test_deserialise_cve_categorisation_label():
         },
     )
     result = odg.labels.deserialise_label(label)
-    assert isinstance(result, odg.labels.CveCategorisationLabel)
+    assert isinstance(result, odg.labels.RiskProfileLabel)
     categorisation = result.value
     assert isinstance(categorisation, odg.cvss.CveCategorisation)
     assert categorisation.authentication_enforced is True

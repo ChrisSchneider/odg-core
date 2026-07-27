@@ -71,8 +71,8 @@ class PackageVersionHintLabel(Label):
 
 
 @dataclasses.dataclass(frozen=True)
-class CveCategorisationLabel(Label):
-    name = 'gardener.cloud/cve-categorisation'
+class RiskProfileLabel(Label):
+    name = 'security.ocm.software/risk-profile'
     value: odg.cvss.CveCategorisation
 
 
@@ -95,6 +95,7 @@ def _label_to_type() -> dict[str, Label]:
 _LABEL_NAME_ALIASES = {
     'cloud.gardener.cnudie/dso/scanning-hints/binary_id/v1': BinaryScanPolicyLabel.name,
     'cloud.gardener.cnudie/dso/scanning-hints/source_analysis/v1': SourceScanPolicyLabel.name,
+    'gardener.cloud/cve-categorisation': RiskProfileLabel.name,
 }
 
 
