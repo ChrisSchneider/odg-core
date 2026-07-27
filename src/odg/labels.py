@@ -97,6 +97,14 @@ _LABEL_NAME_ALIASES = {
     'cloud.gardener.cnudie/dso/scanning-hints/source_analysis/v1': SourceScanPolicyLabel.name,
 }
 
+
+def get_label_names_with_aliases(label_type: type[Label]) -> list[str]:
+    return [label_type.name] + [
+        k for k, v in _LABEL_NAME_ALIASES.items()
+        if v == label_type.name
+    ]
+
+
 def deserialise_label(
     label: ocm.Label | dict,
 ):
@@ -120,19 +128,14 @@ def deserialise_label(
     )
 
 
-_SOURCE_SCAN_POLICY_LABEL_NAMES = [SourceScanPolicyLabel.name] + [
-    k for k, v in _LABEL_NAME_ALIASES.items()
-    if v == SourceScanPolicyLabel.name
-]
-
 def find_source_scan_policy(
     snode: ocm.iter.SourceNode,
 ) -> ScanPolicy | None:
-    for name in _SOURCE_SCAN_POLICY_LABEL_NAMES:
+    for name in get_label_names_with_aliases(SourceScanPolicyLabel):
         if label := snode.source.find_label(name=name):
             return deserialise_label(label).value.policy
 
-    for name in _SOURCE_SCAN_POLICY_LABEL_NAMES:
+    for name in get_label_names_with_aliases(SourceScanPolicyLabel):
         if label := snode.component.find_label(name=name):
             return deserialise_label(label).value.policy
 
