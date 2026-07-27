@@ -1014,6 +1014,7 @@ class SlaViolation:
         | RescoringIPFinding
     )
     referenced_type: str
+    severity: str
     artefact: ComponentArtefactId
 
 
