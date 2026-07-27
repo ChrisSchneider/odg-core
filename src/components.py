@@ -434,48 +434,13 @@ class ComponentResponsibles(aiohttp.web.View):
         main_source = cnudie.util.main_source(component_descriptor.component)
         artifact_name = util.param(params, 'artifact_name')
 
-        def _responsibles_label(
-            component: ocm.Component,
-            artifact_name: str | None = None,
-            owners_label: str = responsibles.labels.ResponsiblesLabel.name,
-        ) -> responsibles.labels.ResponsiblesLabel | None:
-            """
-            Returns the most specific ResponsiblesLabel for the given component and artifact name,
-            or `None` if no label is found.
-
-            If `artifact_name` is given, a fitting artifact with an owner label is looked up and
-            the attached label is returned. Otherwise, a fallback to component-level owner-label
-            happens.
-            """
-            if artifact_name:
-                matching_artifacts = [
-                    a for a in component.resources + component.sources if a.name == artifact_name
-                ]
-                if not matching_artifacts:
-                    raise aiohttp.web.HTTPNotFound(
-                        text=f'{component.name}:{component.version} has no {artifact_name=}',
-                    )
-
-                for artifact in matching_artifacts:
-                    artifact: ocm.Artifact
-                    # hack: hard-code to using first matching artifact with label for now
-                    if responsibles_label := artifact.find_label(name=owners_label):
-                        return responsibles.labels.ResponsiblesLabel.from_dict(
-                            data_dict=dataclasses.asdict(responsibles_label),
-                        )
-
-            if responsibles_label := component.find_label(name=owners_label):
-                return responsibles.labels.ResponsiblesLabel.from_dict(
-                    data_dict=dataclasses.asdict(responsibles_label),
-                )
-
-            return None
-
         try:
-            responsibles_label = _responsibles_label(
+            responsibles_label = responsibles.labels.find_responsibles_label(
                 component=component,
                 artifact_name=artifact_name,
             )
+        except ValueError as e:
+            raise aiohttp.web.HTTPNotFound(text=str(e))
         except (
             dacite.exceptions.UnionMatchError,
             dacite.exceptions.WrongTypeError,
