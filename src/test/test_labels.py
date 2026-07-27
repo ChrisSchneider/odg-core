@@ -6,6 +6,16 @@ import odg.cvss
 import odg.labels
 
 # ---------------------------------------------------------------------------
+# get_label_names_with_aliases
+# ---------------------------------------------------------------------------
+
+def test_get_label_names_with_aliases():
+    names = odg.labels.get_label_names_with_aliases(odg.labels.BinaryScanPolicyLabel)
+    assert 'odg.ocm.software/binary-scan-policy' in names
+    assert 'cloud.gardener.cnudie/dso/scanning-hints/binary_id/v1' in names
+
+
+# ---------------------------------------------------------------------------
 # BinaryScanPolicyLabel
 # ---------------------------------------------------------------------------
 

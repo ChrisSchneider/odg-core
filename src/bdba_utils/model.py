@@ -6,11 +6,6 @@ import ocm
 
 import odg.labels
 
-_BINARY_SCAN_POLICY_LABEL_NAMES = [odg.labels.BinaryScanPolicyLabel.name] + [
-    k for k, v in odg.labels._LABEL_NAME_ALIASES.items()
-    if v == odg.labels.BinaryScanPolicyLabel.name
-]
-
 @dataclasses.dataclass
 class ScanRequest:
     """
@@ -31,7 +26,7 @@ class ScanRequest:
     def skip_vulnerability_scan(self) -> bool:
         # hardcode skip-info to be determined by artefact
         artefact = self.artefact
-        for name in _BINARY_SCAN_POLICY_LABEL_NAMES:
+        for name in odg.labels.get_label_names_with_aliases(odg.labels.BinaryScanPolicyLabel):
             if label := artefact.find_label(name=name):
                 label: odg.labels.BinaryScanPolicyLabel = odg.labels.deserialise_label(label=label)
                 return label.value.policy is odg.labels.ScanPolicy.SKIP
