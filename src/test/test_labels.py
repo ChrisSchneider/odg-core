@@ -59,6 +59,7 @@ def test_binary_scan_policy_label_legacy_name_scan():
     )
     result = odg.labels.deserialise_label(label)
     assert isinstance(result, odg.labels.BinaryScanPolicyLabel)
+    assert result.name is "cloud.gardener.cnudie/dso/scanning-hints/binary_id/v1"
     assert result.value.policy is odg.labels.ScanPolicy.SCAN
     assert result.value.comment is None
 
@@ -70,6 +71,7 @@ def test_binary_scan_policy_label_legacy_name_skip_with_comment():
     )
     result = odg.labels.deserialise_label(label)
     assert isinstance(result, odg.labels.BinaryScanPolicyLabel)
+    assert result.name is "cloud.gardener.cnudie/dso/scanning-hints/binary_id/v1"
     assert result.value.policy is odg.labels.ScanPolicy.SKIP
     assert result.value.comment == 'do not scan'
 
@@ -130,6 +132,7 @@ def test_source_scan_policy_label_legacy_name_scan():
     )
     result = odg.labels.deserialise_label(label)
     assert isinstance(result, odg.labels.SourceScanPolicyLabel)
+    assert result.name is "cloud.gardener.cnudie/dso/scanning-hints/source_analysis/v1"
     assert result.value.policy is odg.labels.ScanPolicy.SCAN
 
 
@@ -147,6 +150,7 @@ def test_source_scan_policy_label_legacy_name_with_path_config():
     )
     result = odg.labels.deserialise_label(label)
     assert isinstance(result, odg.labels.SourceScanPolicyLabel)
+    assert result.name is "cloud.gardener.cnudie/dso/scanning-hints/source_analysis/v1"
     assert result.value.policy is odg.labels.ScanPolicy.SCAN
 
 
@@ -234,6 +238,7 @@ def test_deserialise_cve_categorisation_label():
     )
     result = odg.labels.deserialise_label(label)
     assert isinstance(result, odg.labels.RiskProfileLabel)
+    assert result.name is "gardener.cloud/cve-categorisation"
     categorisation = result.value
     assert isinstance(categorisation, odg.cvss.CveCategorisation)
     assert categorisation.authentication_enforced is True
