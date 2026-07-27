@@ -1,14 +1,16 @@
-import unittest.mock
-
 import ocm
 
 import sast
 
 
 def _make_resource(label: ocm.Label | None) -> ocm.Resource:
-    resource = unittest.mock.Mock(spec=ocm.Resource)
-    resource.find_label.return_value = label
-    return resource
+    return ocm.Resource(
+        name='test-resource',
+        version='1.0.0',
+        type='ociImage',
+        access=None,
+        labels=[label] if label else [],
+    )
 
 
 def test_has_local_linter_no_resources():
