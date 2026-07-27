@@ -50,6 +50,7 @@ def test_responsibles_label_from_dict_email():
     responsible = label.value[0]
     assert isinstance(responsible, responsibles.labels.EmailResponsible)
     assert responsible.email == 'dev@example.com'
+    assert responsible.type is responsibles.labels.ResponsibleType.EMAIL
 
 
 def test_responsibles_label_from_dict_multiple_responsibles():
