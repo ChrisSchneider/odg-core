@@ -160,14 +160,27 @@ def test_source_scan_policy_label_legacy_name_with_path_config():
 
 def test_deserialise_purpose_label():
     label = _make_label(
-        name='gardener.cloud/purposes',
+        name='odg.ocm.software/purposes',
         value=['lint', 'sast'],
     )
     result = odg.labels.deserialise_label(label)
     assert isinstance(result, odg.labels.PurposeLabel)
+    assert result.name is 'odg.ocm.software/purposes'
     assert isinstance(result.value, tuple)
     assert 'lint' in result.value
     assert 'sast' in result.value
+
+
+def test_deserialise_purpose_label_legacy_name():
+    label = _make_label(
+        name='gardener.cloud/purposes',
+        value=['lint', 'pybandit'],
+    )
+    result = odg.labels.deserialise_label(label)
+    assert isinstance(result, odg.labels.PurposeLabel)
+    assert result.name is 'gardener.cloud/purposes'
+    assert 'lint' in result.value
+    assert 'pybandit' in result.value
 
 
 # ---------------------------------------------------------------------------
@@ -259,7 +272,7 @@ def test_deserialise_unknown_label_raises():
 
 def test_deserialise_accepts_dict():
     data = {
-        'name': 'gardener.cloud/purposes',
+        'name': 'odg.ocm.software/purposes',
         'value': ['sast'],
     }
     result = odg.labels.deserialise_label(data)
