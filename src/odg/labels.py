@@ -54,7 +54,7 @@ class SourceScanPolicyLabel(Label):
 
 @dataclasses.dataclass(frozen=True)
 class PurposeLabel(Label):
-    name = 'gardener.cloud/purposes'
+    name = 'odg.ocm.software/purposes'
     value: tuple[str, ...]
 
 
@@ -96,6 +96,7 @@ _LABEL_NAME_ALIASES = {
     'cloud.gardener.cnudie/dso/scanning-hints/binary_id/v1': BinaryScanPolicyLabel.name,
     'cloud.gardener.cnudie/dso/scanning-hints/source_analysis/v1': SourceScanPolicyLabel.name,
     'gardener.cloud/cve-categorisation': RiskProfileLabel.name,
+    'gardener.cloud/purposes': PurposeLabel.name,
 }
 
 
