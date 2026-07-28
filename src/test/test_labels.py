@@ -8,16 +8,12 @@ import odg.cvss
 import odg.labels
 
 
-def _make_label(name: str, value) -> ocm.Label:
-    return ocm.Label(name=name, value=value)
-
-
 # ---------------------------------------------------------------------------
 # BinaryIdScanLabel
 # ---------------------------------------------------------------------------
 
 def test_deserialise_binary_id_scan_label_scan_policy():
-    label = _make_label(
+    label = ocm.Label(
         name='cloud.gardener.cnudie/dso/scanning-hints/binary_id/v1',
         value={'policy': 'scan'},
     )
@@ -29,7 +25,7 @@ def test_deserialise_binary_id_scan_label_scan_policy():
 
 
 def test_deserialise_binary_id_scan_label_skip_policy():
-    label = _make_label(
+    label = ocm.Label(
         name='cloud.gardener.cnudie/dso/scanning-hints/binary_id/v1',
         value={'policy': 'skip', 'comment': 'do not scan'},
     )
@@ -40,7 +36,7 @@ def test_deserialise_binary_id_scan_label_skip_policy():
 
 
 def test_deserialise_binary_id_scan_label_with_path_config():
-    label = _make_label(
+    label = ocm.Label(
         name='cloud.gardener.cnudie/dso/scanning-hints/binary_id/v1',
         value={
             'policy': 'scan',
@@ -61,7 +57,7 @@ def test_deserialise_binary_id_scan_label_with_path_config():
 # ---------------------------------------------------------------------------
 
 def test_deserialise_purpose_label():
-    label = _make_label(
+    label = ocm.Label(
         name='gardener.cloud/purposes',
         value=['lint', 'sast'],
     )
@@ -77,7 +73,7 @@ def test_deserialise_purpose_label():
 # ---------------------------------------------------------------------------
 
 def test_deserialise_package_version_hint_label():
-    label = _make_label(
+    label = ocm.Label(
         name='cloud.gardener.cnudie/dso/scanning-hints/package-versions',
         value=[
             {'name': 'openssl', 'version': '3.0.1'},
@@ -99,7 +95,7 @@ def test_deserialise_package_version_hint_label():
 # ---------------------------------------------------------------------------
 
 def test_deserialise_cve_categorisation_label():
-    label = _make_label(
+    label = ocm.Label(
         name='gardener.cloud/cve-categorisation',
         value={
             'network_exposure': 'public',
@@ -126,7 +122,7 @@ def test_deserialise_cve_categorisation_label():
 # ---------------------------------------------------------------------------
 
 def test_deserialise_unknown_label_raises():
-    label = _make_label(name='unknown.label/does-not-exist', value={})
+    label = ocm.Label(name='unknown.label/does-not-exist', value={})
     with pytest.raises(ValueError, match='unknown'):
         odg.labels.deserialise_label(label)
 
