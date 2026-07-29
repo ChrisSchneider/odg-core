@@ -12,6 +12,7 @@ import odg.labels
 # BinaryIdScanLabel
 # ---------------------------------------------------------------------------
 
+
 def test_deserialise_binary_id_scan_label_scan_policy():
     label = ocm.Label(
         name='cloud.gardener.cnudie/dso/scanning-hints/binary_id/v1',
@@ -56,6 +57,7 @@ def test_deserialise_binary_id_scan_label_with_path_config():
 # PurposeLabel
 # ---------------------------------------------------------------------------
 
+
 def test_deserialise_purpose_label():
     label = ocm.Label(
         name='gardener.cloud/purposes',
@@ -71,6 +73,7 @@ def test_deserialise_purpose_label():
 # ---------------------------------------------------------------------------
 # PackageVersionHintLabel
 # ---------------------------------------------------------------------------
+
 
 def test_deserialise_package_version_hint_label():
     label = ocm.Label(
@@ -93,6 +96,7 @@ def test_deserialise_package_version_hint_label():
 # ---------------------------------------------------------------------------
 # CveCategorisationLabel
 # ---------------------------------------------------------------------------
+
 
 def test_deserialise_cve_categorisation_label():
     label = ocm.Label(
@@ -121,6 +125,7 @@ def test_deserialise_cve_categorisation_label():
 # Unknown label
 # ---------------------------------------------------------------------------
 
+
 def test_deserialise_unknown_label_raises():
     label = ocm.Label(name='unknown.label/does-not-exist', value={})
     with pytest.raises(ValueError, match='unknown'):
@@ -140,6 +145,7 @@ def test_deserialise_accepts_dict():
 # ---------------------------------------------------------------------------
 # find_source_scan_policy
 # ---------------------------------------------------------------------------
+
 
 def _make_source_node(
     source_label: ocm.Label | None,

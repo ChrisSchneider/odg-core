@@ -8,7 +8,6 @@ import urllib.parse
 
 import ci.log
 import cnudie.retrieve
-import ocm.iter
 
 import github_util
 import k8s.util

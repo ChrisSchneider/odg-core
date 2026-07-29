@@ -8,7 +8,6 @@ import logging
 import ci.log
 import cnudie.retrieve
 import ocm
-import ocm.iter
 
 import k8s.util
 import k8s.logging

@@ -44,4 +44,3 @@ def test_has_local_linter_second_resource_matches():
     label_sast = ocm.Label(name='gardener.cloud/purposes', value=['sast'])
     resources = [_make_resource(label_other), _make_resource(label_sast)]
     assert sast.has_local_linter(resources) is True
-
