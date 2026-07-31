@@ -4,7 +4,7 @@
 	"name": "ODG Core",
 	"dockerComposeFile": "compose.yml",
 	"service": "app",
-	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+	"workspaceFolder": "/workspaces/odg-core/",
 
 	"postCreateCommand": "bash .devcontainer/post-create.sh",
 
