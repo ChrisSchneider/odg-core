@@ -9,6 +9,7 @@ import odg.labels
 # get_label_names_with_aliases
 # ---------------------------------------------------------------------------
 
+
 def test_get_label_names_with_aliases():
     names = odg.labels.get_label_names_with_aliases(odg.labels.BinaryScanPolicyLabel)
     assert 'odg.ocm.software/binary-scan-policy' in names
@@ -191,6 +192,7 @@ def test_deserialise_package_version_hint_label():
 # ---------------------------------------------------------------------------
 # RiskProfileLabel
 # ---------------------------------------------------------------------------
+
 
 def test_deserialise_risk_profile_label():
     label = _make_label(
