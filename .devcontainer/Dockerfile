@@ -2,7 +2,7 @@ FROM mcr.microsoft.com/devcontainers/python:3-3.14-trixie
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends kubectl nodejs npm \
-    && npm install -g @anthropic-ai/claude-code \
+#    && npm install -g @anthropic-ai/claude-code \
     && echo 'alias k=kubectl' >> /etc/bash.bashrc \
     && echo 'alias kgp="kubectl get pods"' >> /etc/bash.bashrc \
     && echo 'alias kgs="kubectl get svc"' >> /etc/bash.bashrc \

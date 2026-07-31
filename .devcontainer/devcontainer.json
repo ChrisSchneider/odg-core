@@ -16,7 +16,7 @@
 				"ms-python.debugpy",
 				"ms-ossdata.vscode-pgsql",
 				"charliermarsh.ruff",
-				"anthropic.claude-code",
+//				"anthropic.claude-code",
 				"nwgh.bandit",
 				"ms-kubernetes-tools.vscode-kubernetes-tools"
 			],

@@ -5,8 +5,8 @@ services:
       dockerfile: .devcontainer/Dockerfile
     volumes:
       - ../:/workspaces/odg-core/:cached
-      - $HOME/.claude:/home/vscode/.claude:cached
-      - $HOME/.claude.json:/home/vscode/.claude.json:cached
+#      - $HOME/.claude:/home/vscode/.claude:cached
+#      - $HOME/.claude.json:/home/vscode/.claude.json:cached
       - $HOME/.kube/config:/home/vscode/.kube/config-orig:cached,ro
     command: sleep infinity
     environment:
