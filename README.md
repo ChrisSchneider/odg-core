@@ -56,6 +56,22 @@ You can use Kubernetes-in-Docker (KinD) to deploy such a setup locally.
 
 Please refer to [this guide](https://open-component-model.github.io/open-delivery-gear/contents/how-to/01-local-setup.html) to deploy ODG to KinD.
 
+### Dev Containers
+
+You can also develop ODG in a Devcontainer, providing the following functions:
+
+* Run & debug:
+  * To run the core service, run `Debug: core service`
+  * To run an extension, run `Debug: extension` and select the extension
+* Pytest integration
+* PostgreSQL browser
+* Auto-format & lint on save
+
+Please refer start update your local [configuration and secrets](https://open-component-model.github.io/open-delivery-gear/contents/how-to/00-hybrid-dev-setup.html#configuration-and-secrets).
+
+If you want to work with a KIND cluster, you can use the [.devcontainer/kind-config.yml](.devcontainer/kind-config.yml) to create the KIND cluster with `host.docker.internal` as SAN and then run the `.devcontainer/prepare-kind.py` script to import ODG CRDs and create the matching `src/secrets/kubernetes/kind.yaml` secret.
+
+
 ## Documentation
 
 The documentation is hosted [here](https://open-component-model.github.io/open-delivery-gear/index.html).
