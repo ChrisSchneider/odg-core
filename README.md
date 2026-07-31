@@ -69,8 +69,12 @@ You can also develop ODG in a Devcontainer, providing the following functions:
 
 Please refer start update your local [configuration and secrets](https://open-component-model.github.io/open-delivery-gear/contents/how-to/00-hybrid-dev-setup.html#configuration-and-secrets). The Dev Containers setup expects your K8s secret to be at `devcontainers-cluster.yaml`
 
-If you want to work with a KIND cluster, you can use the [.devcontainer/kind-config.yml](.devcontainer/kind-config.yml) to create the KIND cluster with `host.docker.internal` as SAN and then run the `.devcontainer/prepare-kind.py` script to import ODG CRDs and create the matching `src/secrets/kubernetes/devcontainers-cluster.yaml` secret.
+If you want to work with a KIND cluster:
 
+1. Create the KIND cluster on the host: `kind create cluster --config .devcontainer/kind-config.yml` with `host.docker.internal` as SAN
+1. Start the Dev Container
+1. Open a terminal session. The kubeconfig is copied on every shell startup, with `127.0.0.1` replaced by `host.docker.internal`
+1. Run `.devcontainer/prepare-kind.py` in the Dev Container to import ODG CRDs and create the matching `src/secrets/kubernetes/devcontainers-cluster.yaml` secret
 
 ## Documentation
 
