@@ -12,7 +12,7 @@ services:
     environment:
       # For ODG service
       SECRET_FACTORY_PATH: /workspaces/odg-core/src/secrets
-      K8S_CFG_NAME: kind
+      K8S_CFG_NAME: devcontainers-cluster
       K8S_TARGET_NAMESPACE: default
       DB_HOST: db
       DB_PORT: 5432
@@ -31,7 +31,7 @@ services:
       POSTGRES_PASSWORD: MyPassword
       POSTGRES_DB: postgres
     volumes:
-      - odg-postgres-data:/var/lib/postgresql/data
+      - odg-devcontainers-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 5s
@@ -39,4 +39,4 @@ services:
       retries: 10
 
 volumes:
-  odg-postgres-data:
+  odg-devcontainers-postgres-data:

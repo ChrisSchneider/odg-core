@@ -67,9 +67,9 @@ You can also develop ODG in a Devcontainer, providing the following functions:
 * PostgreSQL browser
 * Auto-format & lint on save
 
-Please refer start update your local [configuration and secrets](https://open-component-model.github.io/open-delivery-gear/contents/how-to/00-hybrid-dev-setup.html#configuration-and-secrets).
+Please refer start update your local [configuration and secrets](https://open-component-model.github.io/open-delivery-gear/contents/how-to/00-hybrid-dev-setup.html#configuration-and-secrets). The Dev Containers setup expects your K8s secret to be at `devcontainers-cluster.yaml`
 
-If you want to work with a KIND cluster, you can use the [.devcontainer/kind-config.yml](.devcontainer/kind-config.yml) to create the KIND cluster with `host.docker.internal` as SAN and then run the `.devcontainer/prepare-kind.py` script to import ODG CRDs and create the matching `src/secrets/kubernetes/kind.yaml` secret.
+If you want to work with a KIND cluster, you can use the [.devcontainer/kind-config.yml](.devcontainer/kind-config.yml) to create the KIND cluster with `host.docker.internal` as SAN and then run the `.devcontainer/prepare-kind.py` script to import ODG CRDs and create the matching `src/secrets/kubernetes/devcontainers-cluster.yaml` secret.
 
 
 ## Documentation

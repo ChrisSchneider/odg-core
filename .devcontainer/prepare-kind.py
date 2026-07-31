@@ -2,7 +2,7 @@
 """
 Prepare the kind devcontainer cluster:
   1. Apply ODG custom CRDs from charts/delivery-service/crds and charts/extensions/crds
-  2. Write src/secrets/kubernetes/kind.yaml from the kubeconfig for
+  2. Write src/secrets/kubernetes/devcontainers-cluster.yaml from the kubeconfig for
      cluster "kind-odg-devcontainer-cluster" found in ~/.kube
 
 All kubectl operations are scoped to "kind-odg-devcontainer-cluster" without
@@ -21,7 +21,7 @@ CRD_DIRS = [
     REPO_ROOT / 'charts' / 'delivery-service' / 'crds',
     REPO_ROOT / 'charts' / 'extensions' / 'crds',
 ]
-SECRET_PATH = REPO_ROOT / 'src' / 'secrets' / 'kubernetes' / 'kind.yaml'
+SECRET_PATH = REPO_ROOT / 'src' / 'secrets' / 'kubernetes' / 'devcontainers-cluster.yaml'
 KUBE_DIR = pathlib.Path.home() / '.kube'
 
 
