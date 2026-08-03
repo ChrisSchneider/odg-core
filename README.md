@@ -69,8 +69,8 @@ You can also develop ODG in a Dev Container, providing the following functions:
 
 To work with a KIND cluster:
 
-1. Create the KIND cluster on the host: `kind create cluster --config .devcontainer/kind-config.yml` with `host.docker.internal` as SAN
-1. Start the Dev Container
+1. Create the KIND cluster on the host: `kind create cluster --config .devcontainer/kind-config.yml`, which includes `host.docker.internal` as SAN
+1. Start the Dev Container (e.g. in [VSCode](https://code.visualstudio.com/docs/devcontainers/containers))
 1. Open a terminal session. The kubeconfig is copied on every shell startup, with `127.0.0.1` replaced by `host.docker.internal`
 1. Run `.devcontainer/prepare-kind.py` in the Dev Container to import ODG CRDs and create the matching `src/secrets/kubernetes/devcontainers-cluster.yaml` secret
 1. Update your local [configuration and secrets](https://open-component-model.github.io/open-delivery-gear/contents/how-to/00-hybrid-dev-setup.html#configuration-and-secrets)
