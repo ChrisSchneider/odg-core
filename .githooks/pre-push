@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+echo "pre-push: running lint..."
+"$ROOT/.ci/lint"
+
+echo "pre-push: running tests..."
+"$ROOT/.ci/test"

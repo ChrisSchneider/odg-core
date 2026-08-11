@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+
+# Only act on staged Python files that exist on disk
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+if [ -z "$STAGED" ]; then
+    exit 0
+fi
+
+echo "pre-commit: applying ruff format..."
+ruff format "$ROOT"
+
+echo "pre-commit: running ruff lint (auto-fix)..."
+ruff check --fix "$ROOT"
+
+# Re-stage any files that were just modified
+git add $STAGED
