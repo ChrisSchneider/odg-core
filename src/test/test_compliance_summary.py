@@ -39,6 +39,7 @@ async def test_vulnerability(component_artefact_id):
         finding_type=odg.model.Datatype.VULNERABILITY_FINDING,
     )
 
+    # Test with base VulnerabilityFinding (no BDBA-specific fields)
     assert (
         await cs.calculate_summary_entry(
             finding_cfg=finding_cfg,
@@ -49,15 +50,9 @@ async def test_vulnerability(component_artefact_id):
                     data=odg.model.VulnerabilityFinding(
                         package_name=None,
                         package_version=None,
-                        base_url=None,
-                        report_url=None,
-                        product_id=-1,
-                        group_id=-1,
                         severity='NONE',
                         cve=None,
-                        cvss_v3_score=-1,
-                        cvss=dict(),
-                        summary=None,
+                        cvss_score=0.0,
                     ),
                 ),
             ],
@@ -75,13 +70,60 @@ async def test_vulnerability(component_artefact_id):
                     data=odg.model.VulnerabilityFinding(
                         package_name=None,
                         package_version=None,
+                        severity='CRITICAL',
+                        cve=None,
+                        cvss_score=9.0,
+                    ),
+                ),
+            ],
+            rescorings=[],
+        )
+    ).categorisation == 'CRITICAL'
+
+    # Test with BDBAVulnerabilityFinding (BDBA-specific fields present)
+    assert (
+        await cs.calculate_summary_entry(
+            finding_cfg=finding_cfg,
+            findings=[
+                odg.model.ArtefactMetadata(
+                    artefact=component_artefact_id,
+                    meta=meta,
+                    data=odg.model.BDBAVulnerabilityFinding(
+                        package_name=None,
+                        package_version=None,
+                        base_url=None,
+                        report_url=None,
+                        product_id=-1,
+                        group_id=-1,
+                        severity='NONE',
+                        cve=None,
+                        cvss_score=-1,
+                        cvss=dict(),
+                        summary=None,
+                    ),
+                ),
+            ],
+            rescorings=[],
+        )
+    ).categorisation is cs.ComplianceEntryCategorisation.CLEAN
+
+    assert (
+        await cs.calculate_summary_entry(
+            finding_cfg=finding_cfg,
+            findings=[
+                odg.model.ArtefactMetadata(
+                    artefact=component_artefact_id,
+                    meta=meta,
+                    data=odg.model.BDBAVulnerabilityFinding(
+                        package_name=None,
+                        package_version=None,
                         base_url=None,
                         report_url=None,
                         product_id=-1,
                         group_id=-1,
                         severity='CRITICAL',
                         cve=None,
-                        cvss_v3_score=-1,
+                        cvss_score=-1,
                         cvss=dict(),
                         summary=None,
                     ),

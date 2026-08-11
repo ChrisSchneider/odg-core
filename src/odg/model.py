@@ -7,14 +7,13 @@ import hashlib
 import logging
 import textwrap
 import typing
+import warnings
 
 import dacite
-
 import ocm
 import ocm.iter
 
 import odg.cvss
-
 
 logger = logging.getLogger(__name__)
 
@@ -498,15 +497,38 @@ class LicenseFinding(Finding, BDBAMixin):
 
 
 @dataclasses.dataclass
-class VulnerabilityFinding(Finding, BDBAMixin):
+class VulnerabilityFinding(Finding):
+    package_name: str
+    package_version: str | None
     cve: str
-    cvss_v3_score: float
-    cvss: odg.cvss.CVSSV3 | dict
-    summary: str | None
+    purl: str | None = None
+    cvss_score: float | None = None  # allow fallback to cvss_v3_score for compatibility
+    cvss: odg.cvss.CVSSV3 | dict | None = None
+    rating_source: str | None = None  # name of the CVSS rating source, e.g. 'NVD', 'redhat', 'alma'
+    summary: str | None = None
+    fixed_version: str | None = None
+    urls: list[str] = dataclasses.field(default_factory=list)
+
+    def __post_init__(self):
+        if self.cvss_score is None:
+            raise ValueError(f'cvss_score is required (cve={self.cve})')
 
     @property
     def key(self) -> str:
         return _as_key(self.package_name, self.package_version, self.cve)
+
+
+@dataclasses.dataclass
+class BDBAVulnerabilityFinding(VulnerabilityFinding, BDBAMixin):
+    cvss_v3_score: typing.Annotated[
+        float | None,
+        warnings.deprecated('use cvss_score instead'),
+    ] = None
+
+    def __post_init__(self):
+        if self.cvss_score is None and self.cvss_v3_score is not None:
+            self.cvss_score = self.cvss_v3_score
+        super().__post_init__()
 
 
 @dataclasses.dataclass
@@ -1708,6 +1730,7 @@ FindingModels = (
     | LicenseFinding
     | OsIdFinding
     | SastFinding
+    | BDBAVulnerabilityFinding
     | VulnerabilityFinding
 )
 InformationalModels = StructureInfo | CryptoAsset | ResponsibleInfo

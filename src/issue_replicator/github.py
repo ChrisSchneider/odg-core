@@ -1306,7 +1306,7 @@ def vulnerability_summary(
 
         current_categorisation = odg.findings.categorise_finding(
             finding_cfg=finding_cfg,
-            finding_property=aggregated_finding.finding.data.cvss_v3_score,
+            finding_property=aggregated_finding.finding.data.cvss_score,
         )
 
         rescored_categorisation = rescore.utility.rescore_finding(
@@ -1336,7 +1336,7 @@ def vulnerability_summary(
     finding_table_callback = {
         'Affected Package': lambda f, _: f'`{f.finding.data.package_name}`',
         'CVE': lambda f, _: f'`{f.finding.data.cve}`',
-        'CVE Score': lambda f, _: f'`{f.finding.data.cvss_v3_score}`',
+        'CVE Score': lambda f, _: f'`{f.finding.data.cvss_score}`',
         'Severity': lambda f, g: _severity_str(
             aggregated_finding=f,
             finding_group=g,
@@ -1401,7 +1401,7 @@ def vulnerability_summary(
             for findings_for_package_and_cve in sorted(
                 findings_for_package_by_cve.values(),
                 key=lambda finding_for_package_and_cve: (
-                    -finding_for_package_and_cve.finding.data.cvss_v3_score,
+                    -finding_for_package_and_cve.finding.data.cvss_score,
                     finding_for_package_and_cve.finding.data.cve,
                 ),
             )
