@@ -162,13 +162,19 @@ def scan(
         r
         for r in results
         if (
-            isinstance(r.data, odg.model.VulnerabilityFinding) and r.data.cvss_score >= cve_threshold
+            isinstance(r.data, odg.model.VulnerabilityFinding)
+            and r.data.cvss_score is not None
+            and r.data.cvss_score >= cve_threshold
         )
     ]
     results_below_threshold = [
         r
         for r in results
-        if (isinstance(r.data, odg.model.VulnerabilityFinding) and r.data.cvss_score < cve_threshold)
+        if (
+            isinstance(r.data, odg.model.VulnerabilityFinding)
+            and r.data.cvss_score is not None
+            and r.data.cvss_score < cve_threshold
+        )
     ]
 
     logger.info('Summary of found vulnerabilities:')

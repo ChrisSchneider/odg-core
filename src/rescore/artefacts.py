@@ -435,7 +435,7 @@ async def _iter_rescoring_proposals(
 
             if finding_cfg.type is odg.model.Datatype.VULNERABILITY_FINDING:
                 cve = am.data.cve
-                cvss = odg.cvss.CVSSV3.from_dict(cvss=am.data.cvss)
+                cvss = odg.cvss.CVSSV3.from_dict(cvss=am.data.cvss) if am.data.cvss else None
                 cvss_score = am.data.cvss_score
 
                 am_across_package_versions = tuple(
@@ -502,7 +502,7 @@ async def _iter_rescoring_proposals(
                             'cvss_score': cvss_score,
                             'cvss': f'{cvss}' if cvss is not None else None,
                             'summary': am.data.summary,
-                            'urls': [f'https://nvd.nist.gov/vuln/detail/{cve}'],
+                            'urls': am.data.urls,
                             'filesystem_paths': filesystem_paths,
                         },
                         'finding_type': finding_cfg.type,

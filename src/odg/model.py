@@ -7,11 +7,11 @@ import hashlib
 import logging
 import textwrap
 import typing
-import warnings
 
 import dacite
 import ocm
 import ocm.iter
+import typing_extensions
 
 import odg.cvss
 
@@ -508,12 +508,15 @@ class VulnerabilityFinding(Finding):
     cvss: odg.cvss.CVSSV3 | dict | None = None
     rating_source: str | None = None  # name of the CVSS rating source, e.g. 'NVD', 'redhat', 'alma'
     summary: str | None = None
-    fixed_version: str | None = None
+    recommendation: str | None = None
     urls: list[str] = dataclasses.field(default_factory=list)
 
     def __post_init__(self):
         if self.cvss_score is None:
             raise ValueError(f'cvss_score is required (cve={self.cve})')
+        nvd_url = f'https://nvd.nist.gov/vuln/detail/{self.cve}'
+        if self.cve.startswith('CVE-') and nvd_url not in self.urls:
+            self.urls.append(nvd_url)
 
     @property
     def key(self) -> str:
@@ -524,7 +527,7 @@ class VulnerabilityFinding(Finding):
 class BDBAVulnerabilityFinding(VulnerabilityFinding, BDBAMixin):
     cvss_v3_score: typing.Annotated[
         float | None,
-        warnings.deprecated('use cvss_score instead'),
+        typing_extensions.deprecated('use cvss_score instead'),
     ] = None
 
     def __post_init__(self):

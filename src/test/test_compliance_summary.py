@@ -1,13 +1,12 @@
 import logging
-import pytest
 
 import ci.log
+import pytest
 
 import compliance_summary as cs
 import odg.findings
 import odg.model
 import paths
-
 
 # surpress warnings due to unknown os-id
 ci.log.configure_default_logging(stdout_level=logging.ERROR)
@@ -51,7 +50,7 @@ async def test_vulnerability(component_artefact_id):
                         package_name=None,
                         package_version=None,
                         severity='NONE',
-                        cve=None,
+                        cve='CVE-1234',
                         cvss_score=0.0,
                     ),
                 ),
@@ -71,7 +70,7 @@ async def test_vulnerability(component_artefact_id):
                         package_name=None,
                         package_version=None,
                         severity='CRITICAL',
-                        cve=None,
+                        cve='CVE-123',
                         cvss_score=9.0,
                     ),
                 ),
@@ -96,7 +95,7 @@ async def test_vulnerability(component_artefact_id):
                         product_id=-1,
                         group_id=-1,
                         severity='NONE',
-                        cve=None,
+                        cve='CVE-123',
                         cvss_score=-1,
                         cvss=dict(),
                         summary=None,
@@ -122,7 +121,7 @@ async def test_vulnerability(component_artefact_id):
                         product_id=-1,
                         group_id=-1,
                         severity='CRITICAL',
-                        cve=None,
+                        cve='CVE-123',
                         cvss_score=-1,
                         cvss=dict(),
                         summary=None,

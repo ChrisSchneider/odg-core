@@ -1365,12 +1365,15 @@ def vulnerability_summary(
         ),
     }
 
-    report_urls_callback = lambda finding_group: sorted(
-        {  # noqa: E731
-            f'[BDBA {finding.finding.data.product_id}]({finding.finding.data.report_url})'
-            for finding in finding_group.findings
-        },
-    )
+    def report_urls_callback(finding_group: FindingGroup) -> list[str]:
+        urls = set()
+        for finding in finding_group.findings:
+            data = finding.finding.data
+            if isinstance(data, odg.model.BDBAVulnerabilityFinding):
+                urls.add(f'[BDBA {data.product_id}]({data.report_url})')
+            else:
+                urls.update(data.urls)
+        return sorted(urls)
 
     def group_aggregated_findings(
         aggregated_findings: tuple[AggregatedFinding],
@@ -1401,7 +1404,7 @@ def vulnerability_summary(
             for findings_for_package_and_cve in sorted(
                 findings_for_package_by_cve.values(),
                 key=lambda finding_for_package_and_cve: (
-                    -finding_for_package_and_cve.finding.data.cvss_score,
+                    -(finding_for_package_and_cve.finding.data.cvss_score or 0),
                     finding_for_package_and_cve.finding.data.cve,
                 ),
             )
