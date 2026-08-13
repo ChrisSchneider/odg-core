@@ -396,8 +396,6 @@ class OperatingSystemId:
 
 @dataclasses.dataclass
 class BDBAMixin:
-    package_name: str
-    package_version: str | None  # bdba might be unable to determine a version
     base_url: str
     report_url: str
     product_id: int
@@ -447,6 +445,8 @@ class FilesystemPath:
 
 @dataclasses.dataclass
 class StructureInfo(BDBAMixin):
+    package_name: str
+    package_version: str | None  # bdba might be unable to determine a version
     licenses: list[License]
     filesystem_paths: list[FilesystemPath]
 
@@ -489,6 +489,8 @@ class IPFinding(Finding):
 
 @dataclasses.dataclass
 class LicenseFinding(Finding, BDBAMixin):
+    package_name: str
+    package_version: str | None  # bdba might be unable to determine a version
     license: License
 
     @property

@@ -500,7 +500,7 @@ async def _iter_rescoring_proposals(
                             'severity': severity,
                             'cve': cve,
                             'cvss_score': cvss_score,
-                            'cvss': f'{cvss}',
+                            'cvss': f'{cvss}' if cvss is not None else None,
                             'summary': am.data.summary,
                             'urls': [f'https://nvd.nist.gov/vuln/detail/{cve}'],
                             'filesystem_paths': filesystem_paths,
