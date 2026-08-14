@@ -56,7 +56,7 @@ class VulnerabilityFinding(odg.model.Finding):
     package_versions: set[str]
     cve: str
     cvss_score: float | None
-    cvss: str
+    cvss: str | None
     summary: str | None
     urls: list[str]
     filesystem_paths: list[odg.model.FilesystemPath]
