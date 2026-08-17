@@ -1337,6 +1337,19 @@ class ExtensionsConfiguration:
         default_factory=BacklogControllerConfig,
     )  # noqa: E501
 
+    def __post_init__(self):
+        vuln_scanners = [
+            name for name, cfg in [
+                ('bdba', self.bdba),
+            ]
+            if cfg is not None and cfg.enabled
+        ]
+        if len(vuln_scanners) > 1:
+            raise ValueError(
+                f'Only one vulnerability scanner may be enabled at a time, '
+                f'got: {vuln_scanners}. Disable all but one.',
+            )
+
     @staticmethod
     def from_dict(extensions_cfg_raw: dict) -> typing.Self:
         """
