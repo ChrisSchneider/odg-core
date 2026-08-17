@@ -4,9 +4,8 @@ import itertools
 import logging
 import pprint
 
-import tabulate
-
 import ocm.iter
+import tabulate
 
 import bdba.client
 import bdba.model as bm
@@ -16,7 +15,6 @@ import lookups
 import ocm_util
 import odg.model
 import util
-
 
 __cmd_name__ = 'bdba'
 logger = logging.getLogger(__name__)
@@ -162,19 +160,13 @@ def scan(
         r
         for r in results
         if (
-            isinstance(r.data, odg.model.VulnerabilityFinding)
-            and r.data.cvss_score is not None
-            and r.data.cvss_score >= cve_threshold
+            isinstance(r.data, odg.model.VulnerabilityFinding) and r.data.cvss_score >= cve_threshold
         )
     ]
     results_below_threshold = [
         r
         for r in results
-        if (
-            isinstance(r.data, odg.model.VulnerabilityFinding)
-            and r.data.cvss_score is not None
-            and r.data.cvss_score < cve_threshold
-        )
+        if (isinstance(r.data, odg.model.VulnerabilityFinding) and r.data.cvss_score < cve_threshold)
     ]
 
     logger.info('Summary of found vulnerabilities:')

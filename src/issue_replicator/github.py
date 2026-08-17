@@ -1404,7 +1404,7 @@ def vulnerability_summary(
             for findings_for_package_and_cve in sorted(
                 findings_for_package_by_cve.values(),
                 key=lambda finding_for_package_and_cve: (
-                    -(finding_for_package_and_cve.finding.data.cvss_score or 0),
+                    -finding_for_package_and_cve.finding.data.cvss_score,
                     finding_for_package_and_cve.finding.data.cve,
                 ),
             )
