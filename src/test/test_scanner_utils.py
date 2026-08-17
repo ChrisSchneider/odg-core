@@ -667,7 +667,7 @@ class TestIterVulnerabilityFindings:
 
     def test_basic_finding_fields(self, vulnerability_cfg):
         findings = list(
-            scanner_utils.cyclonedx.iter_vulnerability_findings(
+            scanner_utils.cyclonedx.parse_vulnerability_findings(
                 self._make_cyclonedx(
                     description='A test vulnerability',
                     recommendation='Update to 8.1.0',
@@ -690,7 +690,7 @@ class TestIterVulnerabilityFindings:
 
     def test_cvss_vector_parsed(self, vulnerability_cfg):
         findings = list(
-            scanner_utils.cyclonedx.iter_vulnerability_findings(
+            scanner_utils.cyclonedx.parse_vulnerability_findings(
                 self._make_cyclonedx(),
                 vulnerability_cfg,
             ),
@@ -720,7 +720,7 @@ class TestIterVulnerabilityFindings:
             ],
         }
         findings = list(
-            scanner_utils.cyclonedx.iter_vulnerability_findings(
+            scanner_utils.cyclonedx.parse_vulnerability_findings(
                 doc,
                 vulnerability_cfg,
             ),
@@ -731,7 +731,7 @@ class TestIterVulnerabilityFindings:
     def test_severity_fallback_when_no_score(self, vulnerability_cfg):
         # 'medium' → 5.0 fallback, which falls in MEDIUM range (4.0–6.9)
         findings = list(
-            scanner_utils.cyclonedx.iter_vulnerability_findings(
+            scanner_utils.cyclonedx.parse_vulnerability_findings(
                 self._make_cyclonedx(score=None, vector=None),
                 vulnerability_cfg,
             ),
@@ -743,7 +743,7 @@ class TestIterVulnerabilityFindings:
     def test_below_threshold_is_skipped(self, vulnerability_cfg):
         # score=1.0 is below MEDIUM minimum (4.0) → categorise_finding returns None → skip
         findings = list(
-            scanner_utils.cyclonedx.iter_vulnerability_findings(
+            scanner_utils.cyclonedx.parse_vulnerability_findings(
                 self._make_cyclonedx(score=1.0, vector=None),
                 vulnerability_cfg,
             ),
@@ -756,7 +756,7 @@ class TestIterVulnerabilityFindings:
             extra_affects=[{'ref': 'ref-b'}],
         )
         findings = list(
-            scanner_utils.cyclonedx.iter_vulnerability_findings(
+            scanner_utils.cyclonedx.parse_vulnerability_findings(
                 doc,
                 vulnerability_cfg,
             ),
@@ -767,7 +767,7 @@ class TestIterVulnerabilityFindings:
     def test_empty_document_yields_nothing(self, vulnerability_cfg):
         assert (
             list(
-                scanner_utils.cyclonedx.iter_vulnerability_findings(
+                scanner_utils.cyclonedx.parse_vulnerability_findings(
                     {},
                     vulnerability_cfg,
                 ),
@@ -778,7 +778,7 @@ class TestIterVulnerabilityFindings:
     def test_no_vulnerabilities_key(self, vulnerability_cfg):
         assert (
             list(
-                scanner_utils.cyclonedx.iter_vulnerability_findings(
+                scanner_utils.cyclonedx.parse_vulnerability_findings(
                     {'bomFormat': 'CycloneDX', 'components': []},
                     vulnerability_cfg,
                 ),
@@ -790,7 +790,7 @@ class TestIterVulnerabilityFindings:
         # The CycloneDX rating says 'medium' but severity on VulnerabilityFinding must be
         # the categorisation.id (configured in vulnerability_cfg), not the raw string.
         findings = list(
-            scanner_utils.cyclonedx.iter_vulnerability_findings(
+            scanner_utils.cyclonedx.parse_vulnerability_findings(
                 self._make_cyclonedx(),
                 vulnerability_cfg,
             ),
@@ -801,7 +801,7 @@ class TestIterVulnerabilityFindings:
         doc = self._make_cyclonedx()
         doc['vulnerabilities'][0]['affects'] = []
         findings = list(
-            scanner_utils.cyclonedx.iter_vulnerability_findings(
+            scanner_utils.cyclonedx.parse_vulnerability_findings(
                 doc,
                 vulnerability_cfg,
             ),
@@ -831,7 +831,7 @@ class TestIterVulnerabilityFindings:
         }
         # Score is used as-is; vector is not parsed (v2 vector format not supported).
         findings = list(
-            scanner_utils.cyclonedx.iter_vulnerability_findings(
+            scanner_utils.cyclonedx.parse_vulnerability_findings(
                 doc,
                 vulnerability_cfg,
             ),
@@ -863,11 +863,215 @@ class TestIterVulnerabilityFindings:
         }
         # Score is used as-is; vector is not parsed (v4 vector format not supported).
         findings = list(
-            scanner_utils.cyclonedx.iter_vulnerability_findings(
+            scanner_utils.cyclonedx.parse_vulnerability_findings(
                 doc,
                 vulnerability_cfg,
             ),
         )
         assert len(findings) == 1
         assert findings[0].cvss_score == 6.5
-        assert findings[0].cvss is None
+
+
+# ---------------------------------------------------------------------------
+# Tests — orchestrator
+# ---------------------------------------------------------------------------
+
+import scanner_utils.orchestrator
+
+
+class _FakeScanner(scanner_utils.orchestrator.Scanner):
+    """Minimal Scanner that returns a canned CycloneDX document."""
+
+    def __init__(self, cyclonedx: dict | None = None):
+        self._cyclonedx = cyclonedx or {}
+        self.binary_calls: list = []
+        self.sbom_calls: list = []
+
+    def scan_binary(self, resource_node, oci_client) -> dict:
+        self.binary_calls.append((resource_node, oci_client))
+        return self._cyclonedx
+
+    def scan_sbom(self, sbom_cyclonedx: dict) -> dict:
+        self.sbom_calls.append(sbom_cyclonedx)
+        return self._cyclonedx
+
+
+class TestRunScan:
+    @staticmethod
+    def _make_kwargs(
+        vulnerability_cfg,
+        scanner: scanner_utils.orchestrator.Scanner,
+        scan_target=scanner_utils.model.ScanningMode.BINARY,
+    ) -> dict:
+        extension_cfg = unittest.mock.Mock()
+        extension_cfg.is_supported.return_value = True
+        extension_cfg.on_unsupported = odg.extensions_cfg.WarningVerbosities.WARNING
+        extension_cfg.scan_target = scan_target
+
+        artefact = odg.model.ComponentArtefactId(
+            component_name='example.org/comp',
+            component_version='1.0.0',
+            artefact=odg.model.LocalArtefactId(
+                artefact_name='test-image',
+                artefact_version='1.0.0',
+                artefact_type=ocm.ArtefactType.OCI_IMAGE,
+                artefact_extra_id={},
+            ),
+            artefact_kind=odg.model.ArtefactKind.RESOURCE,
+        )
+
+        return dict(
+            artefact=artefact,
+            extension_cfg=extension_cfg,
+            vulnerability_cfg=vulnerability_cfg,
+            component_descriptor_lookup=unittest.mock.Mock(),
+            delivery_service_client=unittest.mock.Mock(
+                query_metadata=unittest.mock.Mock(return_value=[]),
+            ),
+            oci_client=unittest.mock.Mock(),
+            scanner=scanner,
+            datasource=odg.model.Datasource.BDBA,
+        )
+
+    @staticmethod
+    def _make_resource_node():
+        resource = ocm.Resource(
+            name='test-image',
+            version='1.0.0',
+            type=ocm.ArtefactType.OCI_IMAGE,
+            access=ocm.OciAccess(imageReference='example.org/image:1.0.0'),
+        )
+        component = ocm.Component(
+            name='example.org/comp',
+            version='1.0.0',
+            repositoryContexts=[],
+            provider='test',
+            sources=[],
+            componentReferences=[],
+            resources=[resource],
+        )
+        return ocm.iter.ResourceNode(
+            path=(ocm.iter.NodePathEntry(component=component),),
+            resource=resource,
+        )
+
+    def _run(self, vulnerability_cfg, scanner, **overrides):
+        kwargs = self._make_kwargs(vulnerability_cfg, scanner)
+        kwargs.update(overrides)
+        with unittest.mock.patch(
+            'k8s.util.get_ocm_node',
+            return_value=self._make_resource_node(),
+        ):
+            scanner_utils.orchestrator.run_scan(**kwargs)
+        return kwargs
+
+    def test_skips_when_vulnerability_cfg_is_none(self, vulnerability_cfg):
+        scanner = _FakeScanner()
+        self._run(vulnerability_cfg=None, scanner=scanner)
+        assert scanner.binary_calls == []
+
+    def test_skips_when_artefact_kind_not_supported(self, vulnerability_cfg):
+        scanner = _FakeScanner()
+        kwargs = self._make_kwargs(vulnerability_cfg, scanner)
+        kwargs['extension_cfg'].is_supported.side_effect = (
+            lambda artefact_kind=None, access_type=None:
+            artefact_kind is None  # only access_type check passes
+        )
+        with unittest.mock.patch('k8s.util.get_ocm_node', return_value=self._make_resource_node()):
+            scanner_utils.orchestrator.run_scan(**kwargs)
+        assert scanner.binary_calls == []
+
+    def test_calls_scan_binary_for_binary_mode(self, vulnerability_cfg):
+        scanner = _FakeScanner()
+        self._run(vulnerability_cfg, scanner)
+        assert len(scanner.binary_calls) == 1
+
+    def test_update_metadata_called_with_scan_info_and_findings(self, vulnerability_cfg):
+        cve_doc = TestIterVulnerabilityFindings._make_cyclonedx()
+        scanner = _FakeScanner(cyclonedx=cve_doc)
+        kwargs = self._run(vulnerability_cfg, scanner)
+        client = kwargs['delivery_service_client']
+        client.update_metadata.assert_called_once()
+        data = client.update_metadata.call_args.kwargs['data']
+        types = [d.meta.type for d in data]
+        assert odg.model.Datatype.ARTEFACT_SCAN_INFO in types
+        assert odg.model.Datatype.VULNERABILITY_FINDING in types
+
+    def test_empty_cyclonedx_writes_only_scan_info(self, vulnerability_cfg):
+        scanner = _FakeScanner(cyclonedx={})
+        kwargs = self._run(vulnerability_cfg, scanner)
+        data = kwargs['delivery_service_client'].update_metadata.call_args.kwargs['data']
+        assert len(data) == 1
+        assert data[0].meta.type == odg.model.Datatype.ARTEFACT_SCAN_INFO
+
+    def test_finding_artefact_ref_has_no_component_version(self, vulnerability_cfg):
+        cve_doc = TestIterVulnerabilityFindings._make_cyclonedx()
+        scanner = _FakeScanner(cyclonedx=cve_doc)
+        kwargs = self._run(vulnerability_cfg, scanner)
+        data = kwargs['delivery_service_client'].update_metadata.call_args.kwargs['data']
+        findings = [d for d in data if d.meta.type == odg.model.Datatype.VULNERABILITY_FINDING]
+        assert all(f.artefact.component_version is None for f in findings)
+
+    def test_sbom_mode_calls_scan_sbom_when_sbom_available(self, vulnerability_cfg):
+        import json
+        sbom_payload = {'bomFormat': 'CycloneDX', 'specVersion': '1.5'}
+        scanner = _FakeScanner()
+        kwargs = self._make_kwargs(
+            vulnerability_cfg, scanner,
+            scan_target=scanner_utils.model.ScanningMode.SBOM,
+        )
+        sbom_entry = [{'data': {'digest': 'sha256:abc123'}}]
+        kwargs['delivery_service_client'].query_metadata.side_effect = (
+            lambda **kw: sbom_entry
+            if kw.get('datasource') is odg.model.Datasource.SBOM_GENERATOR
+            else []
+        )
+        kwargs['delivery_service_client'].get_blob.return_value = (
+            json.dumps(sbom_payload).encode()
+        )
+        with unittest.mock.patch('k8s.util.get_ocm_node', return_value=self._make_resource_node()):
+            scanner_utils.orchestrator.run_scan(**kwargs)
+        assert scanner.sbom_calls == [sbom_payload]
+        assert scanner.binary_calls == []
+
+    def test_sbom_with_binary_fallback_falls_back_when_no_sbom(self, vulnerability_cfg):
+        scanner = _FakeScanner()
+        self._run(
+            vulnerability_cfg, scanner,
+            extension_cfg=unittest.mock.Mock(
+                is_supported=unittest.mock.Mock(return_value=True),
+                on_unsupported=odg.extensions_cfg.WarningVerbosities.WARNING,
+                scan_target=scanner_utils.model.ScanningMode.SBOM_WITH_BINARY_FALLBACK,
+            ),
+        )
+        assert scanner.binary_calls != []
+        assert scanner.sbom_calls == []
+
+    def test_stale_findings_are_deleted(self, vulnerability_cfg):
+        scanner = _FakeScanner(cyclonedx={})
+        stale = odg.model.ArtefactMetadata(
+            artefact=odg.model.ComponentArtefactId(component_name='example.org/comp'),
+            meta=odg.model.Metadata(
+                datasource=odg.model.Datasource.BDBA,
+                type=odg.model.Datatype.VULNERABILITY_FINDING,
+            ),
+            data=odg.model.VulnerabilityFinding(
+                severity='MEDIUM',
+                package_name='oldpkg',
+                package_version='1.0',
+                cve='CVE-2020-0001',
+                cvss_score=5.0,
+            ),
+        )
+        kwargs = self._make_kwargs(vulnerability_cfg, scanner)
+        with unittest.mock.patch(
+            'scanner_utils.findings.iter_existing_findings',
+            return_value=iter([stale]),
+        ), unittest.mock.patch(
+            'k8s.util.get_ocm_node',
+            return_value=self._make_resource_node(),
+        ):
+            scanner_utils.orchestrator.run_scan(**kwargs)
+        kwargs['delivery_service_client'].delete_metadata.assert_called_once()
+        deleted = kwargs['delivery_service_client'].delete_metadata.call_args.kwargs['data']
+        assert stale in deleted

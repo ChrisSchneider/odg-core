@@ -27,10 +27,11 @@ def _strip_cvss_prefix(vector: str) -> str:
 
 
 def _pick_rating(ratings: list[dict]) -> dict | None:
-    """Return the best rating from a CycloneDX vulnerability's ratings array.
+    """
+    Return the best rating from a CycloneDX vulnerability's ratings array.
 
-    Prefers CVSSv3 from trusted sources: nvd → redhat → ghsa → first CVSSv3 → first.
-    Non-v3 ratings are accepted for their score but their vector will not be parsed.
+    Preference order: nvd → redhat → ghsa → first CVSSv3 → first rating of any method.
+    Non-v3 ratings are accepted for their score; their vector will not be parsed.
     """
     if not ratings:
         return None
@@ -48,16 +49,19 @@ def _pick_rating(ratings: list[dict]) -> dict | None:
     return ratings[0]
 
 
-def iter_vulnerability_findings(
+def parse_vulnerability_findings(
     cyclonedx: dict,
     vulnerability_cfg: odg.findings.Finding,
 ) -> collections.abc.Generator[odg.model.VulnerabilityFinding, None, None]:
-    """Parse a CycloneDX JSON document and yield one VulnerabilityFinding per affected component.
+    """
+    Parse a CycloneDX JSON document and yield one VulnerabilityFinding per affected component.
 
-    - Resolves package_name / package_version / purl via bom-ref → component index.
-    - A vulnerability that affects N components yields N findings (same CVE, different package).
-    - Skips findings where categorise_finding() returns None (outside configured score ranges).
-    - Falls back to _SEVERITY_FALLBACK when no CVSSv3 score is present.
+    A vulnerability that affects N components yields N findings (same CVE, different package).
+    Skips findings where categorise_finding() returns None (outside configured score ranges).
+    Falls back to _SEVERITY_FALLBACK when no numeric score is present.
+
+    cyclonedx: Parsed CycloneDX JSON document (as returned by the scanner CLI)
+    vulnerability_cfg: Finding config — determines score thresholds and label-based exclusions
     """
     components_by_ref: dict[str, dict] = {
         c['bom-ref']: c
