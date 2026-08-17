@@ -2,23 +2,22 @@ import collections
 import collections.abc
 import copy
 import dataclasses
-import enum
 import datetime
+import enum
 import functools
 import hashlib
 import logging
 import re
 import textwrap
 
-import github3
-import github3.issues.issue
-import github3.issues.milestone
-import github3.repos
-
 import cnudie.retrieve
 import github.limits
 import github.retry
 import github.util
+import github3
+import github3.issues.issue
+import github3.issues.milestone
+import github3.repos
 import ocm.iter
 import ocm.util
 
@@ -31,7 +30,6 @@ import odg_client.model
 import rescore.utility
 import sprints.model as sm
 import util
-
 
 logger = logging.getLogger(__name__)
 
@@ -1371,8 +1369,6 @@ def vulnerability_summary(
             data = finding.finding.data
             if isinstance(data, odg.model.BDBAVulnerabilityFinding):
                 urls.add(f'[BDBA {data.product_id}]({data.report_url})')
-            else:
-                urls.update(data.urls)
         return sorted(urls)
 
     def group_aggregated_findings(
