@@ -1,9 +1,12 @@
 import collections.abc
 import dataclasses
 
+import ocm
 import ocm.iter
 
+import odg.labels
 import odg.model
+import odg.util
 import odg_client
 
 
@@ -55,6 +58,47 @@ def delete_stale_findings(
 
     if stale:
         delivery_service_client.delete_metadata(data=stale)
+
+
+def iter_package_version_overwrites(
+    component: ocm.Component,
+    resource: ocm.Resource,
+    delivery_service_client: odg_client.DeliveryServiceClient,
+) -> collections.abc.Iterable[odg.model.PackageVersionScannerWriteback]:
+    """
+    Yields package-version overwrite entries for a given component/resource, merging
+    hints from the delivery service (scanner writebacks) and OCM label hints. Resource-level
+    labels take precedence over component-level labels; if a resource label is present the
+    component label is ignored entirely.
+    """
+    artefact = odg.model.component_artefact_id_from_ocm(
+        component=component,
+        artefact=resource,
+    )
+
+    yield from odg.util.iter_scanner_writebacks(
+        scanner_writeback_type=odg.model.ScannerWritebackType.PACKAGE_VERSION,
+        artefact_id=artefact,
+        delivery_service_client=delivery_service_client,
+    )
+
+    package_hints_label = resource.find_label(name=odg.labels.PackageVersionHintLabel.name)
+
+    if not package_hints_label:
+        package_hints_label = component.find_label(name=odg.labels.PackageVersionHintLabel.name)
+
+        if not package_hints_label:
+            return
+
+    yield from (
+        odg.model.PackageVersionScannerWriteback(
+            package_name=package_name,
+            package_version_from=None,
+            package_version_to=package_version_to,
+        )
+        for hint in package_hints_label.value
+        if ((package_name := hint.get('name')) and (package_version_to := hint.get('version')))
+    )
 
 
 def make_artefact_scan_info(
