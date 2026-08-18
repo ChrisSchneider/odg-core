@@ -11,6 +11,11 @@ logger = logging.getLogger(__name__)
 # Preferred source order when multiple CVSS ratings are present.
 _PREFERRED_SOURCES = ('nvd', 'redhat', 'ghsa')
 
+# Map known long-form / alternate source names to their canonical key in _PREFERRED_SOURCES.
+_SOURCE_ALIASES: dict[str, str] = {
+    'national vulnerability database': 'nvd',
+}
+
 _SEVERITY_FALLBACK: dict[str, float] = {
     'critical': 9.5,
     'high': 8.0,
@@ -39,7 +44,9 @@ def _pick_rating(ratings: list[dict]) -> dict | None:
 
     for source in _PREFERRED_SOURCES:
         for r in cvssv3:
-            if (r.get('source') or {}).get('name', '').lower() == source:
+            raw = (r.get('source') or {}).get('name', '').lower()
+            canonical = _SOURCE_ALIASES.get(raw, raw)
+            if canonical == source:
                 return r
 
     if cvssv3:
@@ -62,9 +69,13 @@ def iter_vulnerability_findings(
     components_by_ref: dict[str, dict] = {
         c['bom-ref']: c for c in cyclonedx.get('components') or [] if c.get('bom-ref')
     }
+    meta_component = cyclonedx.get('metadata', {}).get('component') or {}
+    if meta_ref := meta_component.get('bom-ref'):
+        components_by_ref.setdefault(meta_ref, meta_component)
 
     for vuln in cyclonedx.get('vulnerabilities') or []:
-        cve = vuln.get('id', '')
+        if not (cve := vuln.get('id')):
+            raise ValueError(f'vulnerability entry has no id: {vuln!r}')
         description = vuln.get('description')
         recommendation = vuln.get('recommendation')
         urls = [a['url'] for a in (vuln.get('advisories') or []) if a.get('url')]
@@ -110,10 +121,14 @@ def iter_vulnerability_findings(
         for affect in affects:
             ref = affect.get('ref', '')
             component = components_by_ref.get(ref, {})
+            if not (package_name := component.get('name')):
+                raise ValueError(f'{cve}: component {ref!r} has no name')
+            if not (package_version := component.get('version')):
+                raise ValueError(f'{cve}: component {ref!r} has no version')
             yield odg.model.VulnerabilityFinding(
                 severity=categorisation.id,
-                package_name=component.get('name', ref),
-                package_version=component.get('version'),
+                package_name=package_name,
+                package_version=package_version,
                 cve=cve,
                 purl=component.get('purl'),
                 cvss_score=cvss_score,

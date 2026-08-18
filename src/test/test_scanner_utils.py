@@ -728,7 +728,76 @@ class TestIterVulnerabilityFindings:
         assert findings[0].cvss_score == 5.5  # NVD wins over GHSA 6.0
         assert findings[0].rating_source == 'NVD'
 
-    def test_severity_fallback_when_no_score(self, vulnerability_cfg):
+    def test_metadata_component_ref_resolved(self, vulnerability_cfg):
+        # A vulnerability whose affects[].ref targets metadata.component must resolve
+        # package_name/package_version/purl from that component, not fall back to the raw ref.
+        ref = 'pkg:oci/my-image@sha256:abc123'
+        doc = {
+            'bomFormat': 'CycloneDX',
+            'specVersion': '1.5',
+            'metadata': {
+                'component': {
+                    'bom-ref': ref,
+                    'name': 'my-image',
+                    'version': '1.2.3',
+                    'purl': ref,
+                },
+            },
+            'components': [],
+            'vulnerabilities': [
+                {
+                    'id': 'CVE-2025-5555',
+                    'ratings': [
+                        {
+                            'source': {'name': 'NVD'},
+                            'score': 5.0,
+                            'method': 'CVSSv31',
+                            'vector': 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N',
+                        },
+                    ],
+                    'affects': [{'ref': ref}],
+                },
+            ],
+        }
+        findings = list(
+            scanner_utils.cyclonedx.iter_vulnerability_findings(doc, vulnerability_cfg),
+        )
+        assert len(findings) == 1
+        assert findings[0].package_name == 'my-image'
+        assert findings[0].package_version == '1.2.3'
+        assert findings[0].purl == ref
+
+        # "National Vulnerability Database" is an alias for "nvd" and must win over GHSA.
+        ref = 'pkg:npm/lodash@4.17.20'
+        doc = {
+            'bomFormat': 'CycloneDX',
+            'specVersion': '1.5',
+            'components': [{'bom-ref': ref, 'name': 'lodash', 'version': '4.17.20'}],
+            'vulnerabilities': [
+                {
+                    'id': 'CVE-2025-4444',
+                    'ratings': [
+                        {'source': {'name': 'GHSA'}, 'score': 6.0, 'method': 'CVSSv31'},
+                        {
+                            'source': {'name': 'National Vulnerability Database'},
+                            'score': 5.5,
+                            'method': 'CVSSv31',
+                            'vector': 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N',
+                        },
+                    ],
+                    'affects': [{'ref': ref}],
+                },
+            ],
+        }
+        findings = list(
+            scanner_utils.cyclonedx.iter_vulnerability_findings(
+                doc,
+                vulnerability_cfg,
+            ),
+        )
+        assert findings[0].cvss_score == 5.5  # NVD alias wins over GHSA 6.0
+        assert findings[0].rating_source == 'National Vulnerability Database'
+
         # 'medium' → 5.0 fallback, which falls in MEDIUM range (4.0–6.9)
         findings = list(
             scanner_utils.cyclonedx.iter_vulnerability_findings(
@@ -872,3 +941,17 @@ class TestIterVulnerabilityFindings:
         assert len(findings) == 1
         assert findings[0].cvss_score == 6.5
         assert findings[0].cvss is None
+
+    @pytest.mark.parametrize(
+        'patch,match',
+        [
+            (lambda d: d['vulnerabilities'][0].__delitem__('id'), 'no id'),
+            (lambda d: d['components'][0].__delitem__('name'), 'no name'),
+            (lambda d: d['components'][0].__delitem__('version'), 'no version'),
+        ],
+    )
+    def test_missing_required_field_raises(self, vulnerability_cfg, patch, match):
+        doc = self._make_cyclonedx()
+        patch(doc)
+        with pytest.raises(ValueError, match=match):
+            list(scanner_utils.cyclonedx.iter_vulnerability_findings(doc, vulnerability_cfg))
