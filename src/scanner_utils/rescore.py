@@ -6,7 +6,6 @@ import odg.cvss
 import odg.findings
 import rescore.utility as ru
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -40,7 +39,7 @@ def compute_auto_triage_cves(
     if not component_version:
         return []
 
-    vulns_to_triage = []
+    auto_triage_cves = []
 
     for v in vulnerabilities:
         if v.is_skippable or v.is_already_triaged:
@@ -51,13 +50,19 @@ def compute_auto_triage_cves(
             finding_property=v.cvss_score,
         )
 
-        if not categorisation or not categorisation.automatic_rescoring:
+        if not categorisation or not categorisation.automatic_rescoring or not v.cvss_vector:
+            continue
+
+        try:
+            cvss = odg.cvss.CVSSV3.parse(v.cvss_vector)
+        except (ValueError, KeyError, IndexError):
+            logger.debug('could not parse CVSS vector %r for %s', v.cvss_vector, v.cve)
             continue
 
         matching_rules = ru.matching_rescore_rules(
             rescoring_rules=vulnerability_cfg.rescoring_ruleset.rules,
             categorisation=cve_categorisation,
-            cvss=odg.cvss.CVSSV3.parse(v.cvss_vector),
+            cvss=cvss,
         )
 
         rescored_categorisation = ru.rescore_finding(
@@ -68,11 +73,11 @@ def compute_auto_triage_cves(
         )
 
         if rescored_categorisation.value == 0:
-            vulns_to_triage.append(v.cve)
+            auto_triage_cves.append(v.cve)
 
-    if vulns_to_triage:
+    if auto_triage_cves:
         logger.debug(
-            f'auto-triage candidates for {component_name}:{component_version}: {vulns_to_triage}',
+            f'auto-triage candidates for {component_name}:{component_version}: {auto_triage_cves}',
         )
 
-    return vulns_to_triage
+    return auto_triage_cves

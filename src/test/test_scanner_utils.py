@@ -602,6 +602,25 @@ class TestComputeAutoTriageCves:
         result = self._compute([], vulnerability_cfg, cve_categorisation)
         assert result == []
 
+    def test_no_cvss_vector_does_not_raise(self, vulnerability_cfg, cve_categorisation):
+        # A non-skippable candidate with cvss_vector=None must be silently skipped
+        # without attempting CVSSV3.parse (which would crash on None).
+        result = self._compute(
+            [self._vuln('CVE-2024-0001', cvss_vector=None, cvss_score=5.0)],
+            vulnerability_cfg,
+            cve_categorisation,
+        )
+        assert result == []
+
+    def test_invalid_cvss_vector_does_not_raise(self, vulnerability_cfg, cve_categorisation):
+        # A malformed vector string must be caught and the candidate skipped without crashing.
+        result = self._compute(
+            [self._vuln('CVE-2024-0001', cvss_vector='not-a-valid-vector', cvss_score=5.0)],
+            vulnerability_cfg,
+            cve_categorisation,
+        )
+        assert result == []
+
     def test_only_matching_cves_are_returned(self, vulnerability_cfg, cve_categorisation):
         network_cvss = 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H'
         result = self._compute(
@@ -728,7 +747,76 @@ class TestIterVulnerabilityFindings:
         assert findings[0].cvss_score == 5.5  # NVD wins over GHSA 6.0
         assert findings[0].rating_source == 'NVD'
 
-    def test_severity_fallback_when_no_score(self, vulnerability_cfg):
+    def test_metadata_component_ref_resolved(self, vulnerability_cfg):
+        # A vulnerability whose affects[].ref targets metadata.component must resolve
+        # package_name/package_version/purl from that component, not fall back to the raw ref.
+        ref = 'pkg:oci/my-image@sha256:abc123'
+        doc = {
+            'bomFormat': 'CycloneDX',
+            'specVersion': '1.5',
+            'metadata': {
+                'component': {
+                    'bom-ref': ref,
+                    'name': 'my-image',
+                    'version': '1.2.3',
+                    'purl': ref,
+                },
+            },
+            'components': [],
+            'vulnerabilities': [
+                {
+                    'id': 'CVE-2025-5555',
+                    'ratings': [
+                        {
+                            'source': {'name': 'NVD'},
+                            'score': 5.0,
+                            'method': 'CVSSv31',
+                            'vector': 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N',
+                        },
+                    ],
+                    'affects': [{'ref': ref}],
+                },
+            ],
+        }
+        findings = list(
+            scanner_utils.cyclonedx.parse_vulnerability_findings(doc, vulnerability_cfg),
+        )
+        assert len(findings) == 1
+        assert findings[0].package_name == 'my-image'
+        assert findings[0].package_version == '1.2.3'
+        assert findings[0].purl == ref
+
+        # "National Vulnerability Database" is an alias for "nvd" and must win over GHSA.
+        ref = 'pkg:npm/lodash@4.17.20'
+        doc = {
+            'bomFormat': 'CycloneDX',
+            'specVersion': '1.5',
+            'components': [{'bom-ref': ref, 'name': 'lodash', 'version': '4.17.20'}],
+            'vulnerabilities': [
+                {
+                    'id': 'CVE-2025-4444',
+                    'ratings': [
+                        {'source': {'name': 'GHSA'}, 'score': 6.0, 'method': 'CVSSv31'},
+                        {
+                            'source': {'name': 'National Vulnerability Database'},
+                            'score': 5.5,
+                            'method': 'CVSSv31',
+                            'vector': 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N',
+                        },
+                    ],
+                    'affects': [{'ref': ref}],
+                },
+            ],
+        }
+        findings = list(
+            scanner_utils.cyclonedx.parse_vulnerability_findings(
+                doc,
+                vulnerability_cfg,
+            ),
+        )
+        assert findings[0].cvss_score == 5.5  # NVD alias wins over GHSA 6.0
+        assert findings[0].rating_source == 'National Vulnerability Database'
+
         # 'medium' → 5.0 fallback, which falls in MEDIUM range (4.0–6.9)
         findings = list(
             scanner_utils.cyclonedx.parse_vulnerability_findings(
@@ -842,6 +930,7 @@ class TestIterVulnerabilityFindings:
 
     def test_cvssv4_only_rating_yields_finding_without_parsed_vector(self, vulnerability_cfg):
         ref = 'pkg:apk/alpine/curl@8.0.0'
+        vector = 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N'
         doc = {
             'bomFormat': 'CycloneDX',
             'specVersion': '1.5',
@@ -854,7 +943,7 @@ class TestIterVulnerabilityFindings:
                             'source': {'name': 'NVD'},
                             'score': 6.5,
                             'method': 'CVSSv4',
-                            'vector': 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N',
+                            'vector': vector,
                         },
                     ],
                     'affects': [{'ref': ref}],
@@ -870,6 +959,45 @@ class TestIterVulnerabilityFindings:
         )
         assert len(findings) == 1
         assert findings[0].cvss_score == 6.5
+        assert findings[0].cvss is None
+
+    @pytest.mark.parametrize(
+        'patch,match',
+        [
+            (lambda d: d['vulnerabilities'][0].__delitem__('id'), 'no id'),
+            (lambda d: d['components'][0].__delitem__('name'), 'no name'),
+            (lambda d: d['components'][0].__delitem__('version'), 'no version'),
+        ],
+    )
+    def test_missing_required_field_raises(self, vulnerability_cfg, patch, match):
+        doc = self._make_cyclonedx()
+        patch(doc)
+        with pytest.raises(ValueError, match=match):
+            list(scanner_utils.cyclonedx.parse_vulnerability_findings(doc, vulnerability_cfg))
+
+    def test_not_affected_analysis_state_skips_finding(self, vulnerability_cfg):
+        # A vulnerability with analysis.state == 'not_affected' must produce no finding
+        # even when it has a valid rating (score in MEDIUM range) and an affected ref.
+        doc = self._make_cyclonedx(score=5.3, vector='CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N')
+        doc['vulnerabilities'][0]['analysis'] = {'state': 'not_affected'}
+        findings = list(
+            scanner_utils.cyclonedx.parse_vulnerability_findings(doc, vulnerability_cfg),
+        )
+        assert findings == []
+
+    def test_malformed_cvssv3_vector_yields_finding_with_cvss_none(self, vulnerability_cfg):
+        # A CVSSv3 rating with an unparseable vector string must still yield a finding
+        # (score is valid) but with cvss=None rather than raising.
+        doc = self._make_cyclonedx(
+            score=5.3,
+            vector='CVSS:3.1/AV:INVALID/broken',
+        )
+        findings = list(
+            scanner_utils.cyclonedx.parse_vulnerability_findings(doc, vulnerability_cfg),
+        )
+        assert len(findings) == 1
+        assert findings[0].cvss_score == 5.3
+        assert findings[0].cvss is None
 
 
 # ---------------------------------------------------------------------------
@@ -974,8 +1102,9 @@ class TestRunScan:
         scanner = _FakeScanner()
         kwargs = self._make_kwargs(vulnerability_cfg, scanner)
         kwargs['extension_cfg'].is_supported.side_effect = (
-            lambda artefact_kind=None, access_type=None:
-            artefact_kind is None  # only access_type check passes
+            lambda artefact_kind=None, access_type=None: (
+                artefact_kind is None
+            )  # only access_type check passes
         )
         with unittest.mock.patch('k8s.util.get_ocm_node', return_value=self._make_resource_node()):
             scanner_utils.orchestrator.run_scan(**kwargs)
@@ -1014,21 +1143,19 @@ class TestRunScan:
 
     def test_sbom_mode_calls_scan_sbom_when_sbom_available(self, vulnerability_cfg):
         import json
+
         sbom_payload = {'bomFormat': 'CycloneDX', 'specVersion': '1.5'}
         scanner = _FakeScanner()
         kwargs = self._make_kwargs(
-            vulnerability_cfg, scanner,
+            vulnerability_cfg,
+            scanner,
             scan_target=scanner_utils.model.ScanningMode.SBOM,
         )
         sbom_entry = [{'data': {'digest': 'sha256:abc123'}}]
-        kwargs['delivery_service_client'].query_metadata.side_effect = (
-            lambda **kw: sbom_entry
-            if kw.get('datasource') is odg.model.Datasource.SBOM_GENERATOR
-            else []
+        kwargs['delivery_service_client'].query_metadata.side_effect = lambda **kw: (
+            sbom_entry if kw.get('datasource') is odg.model.Datasource.SBOM_GENERATOR else []
         )
-        kwargs['delivery_service_client'].get_blob.return_value = (
-            json.dumps(sbom_payload).encode()
-        )
+        kwargs['delivery_service_client'].get_blob.return_value = json.dumps(sbom_payload).encode()
         with unittest.mock.patch('k8s.util.get_ocm_node', return_value=self._make_resource_node()):
             scanner_utils.orchestrator.run_scan(**kwargs)
         assert scanner.sbom_calls == [sbom_payload]
@@ -1037,7 +1164,8 @@ class TestRunScan:
     def test_sbom_with_binary_fallback_falls_back_when_no_sbom(self, vulnerability_cfg):
         scanner = _FakeScanner()
         self._run(
-            vulnerability_cfg, scanner,
+            vulnerability_cfg,
+            scanner,
             extension_cfg=unittest.mock.Mock(
                 is_supported=unittest.mock.Mock(return_value=True),
                 on_unsupported=odg.extensions_cfg.WarningVerbosities.WARNING,
@@ -1064,12 +1192,15 @@ class TestRunScan:
             ),
         )
         kwargs = self._make_kwargs(vulnerability_cfg, scanner)
-        with unittest.mock.patch(
-            'scanner_utils.findings.iter_existing_findings',
-            return_value=iter([stale]),
-        ), unittest.mock.patch(
-            'k8s.util.get_ocm_node',
-            return_value=self._make_resource_node(),
+        with (
+            unittest.mock.patch(
+                'scanner_utils.findings.iter_existing_findings',
+                return_value=iter([stale]),
+            ),
+            unittest.mock.patch(
+                'k8s.util.get_ocm_node',
+                return_value=self._make_resource_node(),
+            ),
         ):
             scanner_utils.orchestrator.run_scan(**kwargs)
         kwargs['delivery_service_client'].delete_metadata.assert_called_once()

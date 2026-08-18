@@ -40,8 +40,13 @@ def rescore(
 
     logger.info(f'rescoring {scan_result.display_name} - {scan_result.product_id=}')
 
+    # component.vulnerabilities generator is always truthy; tuple() forces evaluation
+    components_with_vulnerabilities = (
+        component for component in scan_result.components if tuple(component.vulnerabilities)
+    )
+
     components_with_vulnerabilities = sorted(
-        (c for c in scan_result.components if tuple(c.vulnerabilities)),
+        components_with_vulnerabilities,
         key=lambda c: c.name,
     )
 
@@ -59,7 +64,7 @@ def rescore(
             for v in c.vulnerabilities
         ]
 
-        vulns_to_triage = scanner_utils.rescore.compute_auto_triage_cves(
+        auto_triage_cves = scanner_utils.rescore.compute_auto_triage_cves(
             component_name=c.name,
             component_version=c.version,
             vulnerabilities=candidates,
@@ -67,12 +72,12 @@ def rescore(
             cve_categorisation=cve_categorisation,
         )
 
-        if vulns_to_triage:
+        if auto_triage_cves:
             bdba_client.add_triage_raw(
                 {
                     'component': c.name,
                     'version': c.version,
-                    'vulns': vulns_to_triage,
+                    'vulns': auto_triage_cves,
                     'scope': bm.TriageScope.RESULT.value,
                     'reason': 'OT',
                     'description': 'auto-assessed as irrelevant based on cve-categorisation',
