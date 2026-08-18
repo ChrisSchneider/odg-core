@@ -49,7 +49,6 @@ class Scanner(abc.ABC):
     For local or OCI blobs the scanner streams the blob bytes through `oci_client.blob()`.
     """
 
-    @abc.abstractmethod
     def scan_binary(
         self,
         resource_node: ocm.iter.ResourceNode,
