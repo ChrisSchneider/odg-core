@@ -40,7 +40,7 @@ def rescore(
 
     logger.info(f'rescoring {scan_result.display_name} - {scan_result.product_id=}')
 
-    # generator is always truthy; tuple() forces evaluation
+    # component.vulnerabilities generator is always truthy; tuple() forces evaluation
     components_with_vulnerabilities = (
         component for component in scan_result.components if tuple(component.vulnerabilities)
     )
