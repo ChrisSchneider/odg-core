@@ -34,7 +34,7 @@ def compute_auto_triage_cves(
     if not component_version:
         return []
 
-    vulns_to_triage = []
+    auto_triage_cves = []
 
     for v in vulnerabilities:
         if v.is_skippable or v.is_already_triaged:
@@ -62,11 +62,11 @@ def compute_auto_triage_cves(
         )
 
         if rescored_categorisation.value == 0:
-            vulns_to_triage.append(v.cve)
+            auto_triage_cves.append(v.cve)
 
-    if vulns_to_triage:
+    if auto_triage_cves:
         logger.info(
-            f'auto-triage candidates for {component_name}:{component_version}: {vulns_to_triage}',
+            f'auto-triage candidates for {component_name}:{component_version}: {auto_triage_cves}',
         )
 
-    return vulns_to_triage
+    return auto_triage_cves
