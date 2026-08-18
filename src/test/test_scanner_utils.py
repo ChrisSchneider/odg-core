@@ -602,6 +602,25 @@ class TestComputeAutoTriageCves:
         result = self._compute([], vulnerability_cfg, cve_categorisation)
         assert result == []
 
+    def test_no_cvss_vector_does_not_raise(self, vulnerability_cfg, cve_categorisation):
+        # A non-skippable candidate with cvss_vector=None must be silently skipped
+        # without attempting CVSSV3.parse (which would crash on None).
+        result = self._compute(
+            [self._vuln('CVE-2024-0001', cvss_vector=None, cvss_score=5.0)],
+            vulnerability_cfg,
+            cve_categorisation,
+        )
+        assert result == []
+
+    def test_invalid_cvss_vector_does_not_raise(self, vulnerability_cfg, cve_categorisation):
+        # A malformed vector string must be caught and the candidate skipped without crashing.
+        result = self._compute(
+            [self._vuln('CVE-2024-0001', cvss_vector='not-a-valid-vector', cvss_score=5.0)],
+            vulnerability_cfg,
+            cve_categorisation,
+        )
+        assert result == []
+
     def test_only_matching_cves_are_returned(self, vulnerability_cfg, cve_categorisation):
         network_cvss = 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H'
         result = self._compute(
@@ -955,3 +974,27 @@ class TestIterVulnerabilityFindings:
         patch(doc)
         with pytest.raises(ValueError, match=match):
             list(scanner_utils.cyclonedx.iter_vulnerability_findings(doc, vulnerability_cfg))
+
+    def test_not_affected_analysis_state_skips_finding(self, vulnerability_cfg):
+        # A vulnerability with analysis.state == 'not_affected' must produce no finding
+        # even when it has a valid rating (score in MEDIUM range) and an affected ref.
+        doc = self._make_cyclonedx(score=5.3, vector='CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N')
+        doc['vulnerabilities'][0]['analysis'] = {'state': 'not_affected'}
+        findings = list(
+            scanner_utils.cyclonedx.iter_vulnerability_findings(doc, vulnerability_cfg),
+        )
+        assert findings == []
+
+    def test_malformed_cvssv3_vector_yields_finding_with_cvss_none(self, vulnerability_cfg):
+        # A CVSSv3 rating with an unparseable vector string must still yield a finding
+        # (score is valid) but with cvss=None rather than raising.
+        doc = self._make_cyclonedx(
+            score=5.3,
+            vector='CVSS:3.1/AV:INVALID/broken',
+        )
+        findings = list(
+            scanner_utils.cyclonedx.iter_vulnerability_findings(doc, vulnerability_cfg),
+        )
+        assert len(findings) == 1
+        assert findings[0].cvss_score == 5.3
+        assert findings[0].cvss is None

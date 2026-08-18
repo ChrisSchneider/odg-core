@@ -45,13 +45,19 @@ def compute_auto_triage_cves(
             finding_property=v.cvss_score,
         )
 
-        if not categorisation or not categorisation.automatic_rescoring:
+        if not categorisation or not categorisation.automatic_rescoring or not v.cvss_vector:
+            continue
+
+        try:
+            cvss = odg.cvss.CVSSV3.parse(v.cvss_vector)
+        except (ValueError, KeyError, IndexError):
+            logger.debug('could not parse CVSS vector %r for %s', v.cvss_vector, v.cve)
             continue
 
         matching_rules = ru.matching_rescore_rules(
             rescoring_rules=vulnerability_cfg.rescoring_ruleset.rules,
             categorisation=cve_categorisation,
-            cvss=odg.cvss.CVSSV3.parse(v.cvss_vector),
+            cvss=cvss,
         )
 
         rescored_categorisation = ru.rescore_finding(

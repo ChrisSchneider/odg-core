@@ -76,6 +76,12 @@ def iter_vulnerability_findings(
     for vuln in cyclonedx.get('vulnerabilities') or []:
         if not (cve := vuln.get('id')):
             raise ValueError(f'vulnerability entry has no id: {vuln!r}')
+
+        analysis_state = (vuln.get('analysis') or {}).get('state', '')
+        if analysis_state == 'not_affected':
+            logger.debug('skipping %s: analysis state is not_affected', cve)
+            continue
+
         description = vuln.get('description')
         recommendation = vuln.get('recommendation')
         urls = [a['url'] for a in (vuln.get('advisories') or []) if a.get('url')]
