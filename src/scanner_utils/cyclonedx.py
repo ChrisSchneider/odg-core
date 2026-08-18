@@ -60,9 +60,7 @@ def iter_vulnerability_findings(
     - Falls back to _SEVERITY_FALLBACK when no CVSSv3 score is present.
     """
     components_by_ref: dict[str, dict] = {
-        c['bom-ref']: c
-        for c in cyclonedx.get('components') or []
-        if c.get('bom-ref')
+        c['bom-ref']: c for c in cyclonedx.get('components') or [] if c.get('bom-ref')
     }
 
     for vuln in cyclonedx.get('vulnerabilities') or []:

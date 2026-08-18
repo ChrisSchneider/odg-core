@@ -234,7 +234,7 @@ def test_rescore_finding(
             rescoring_rules=vulnerability_cfg.rescoring_ruleset.rules,
             categorisation=cve_categorisation,
             cvss=cvss,
-        )
+        ),
     )
     result = rescore.utility.rescore_finding(
         finding_cfg=vulnerability_cfg,

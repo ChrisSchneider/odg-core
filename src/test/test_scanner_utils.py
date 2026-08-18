@@ -842,6 +842,7 @@ class TestIterVulnerabilityFindings:
 
     def test_cvssv4_only_rating_yields_finding_without_parsed_vector(self, vulnerability_cfg):
         ref = 'pkg:apk/alpine/curl@8.0.0'
+        vector = 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N'
         doc = {
             'bomFormat': 'CycloneDX',
             'specVersion': '1.5',
@@ -854,7 +855,7 @@ class TestIterVulnerabilityFindings:
                             'source': {'name': 'NVD'},
                             'score': 6.5,
                             'method': 'CVSSv4',
-                            'vector': 'CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N',
+                            'vector': vector,
                         },
                     ],
                     'affects': [{'ref': ref}],
