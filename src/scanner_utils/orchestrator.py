@@ -11,10 +11,14 @@ import dataclasses
 import datetime
 import json
 import logging
+import os
+import tempfile
 
+import ocm
 import ocm.iter
 
 import k8s.util
+import ocm_util
 import odg.extensions_cfg
 import odg.findings
 import odg.model
@@ -24,6 +28,14 @@ import scanner_utils.findings
 import scanner_utils.model
 
 logger = logging.getLogger(__name__)
+
+_OCI_IMAGE_MEDIA_TYPES = frozenset(
+    {
+        'application/vnd.oci.image.manifest.v1+tar',
+        'application/vnd.oci.image.manifest.v1+tar+gzip',
+        'application/vnd.oci.image.index.v1+tar.gzip',
+    }
+)
 
 
 class SbomNotAvailable(Exception):
@@ -40,33 +52,128 @@ class Scanner(abc.ABC):
     """
     Interface that a scanner extension must implement.
 
-    Each method receives an already-resolved `resource_node` (the OCM resource with its
-    component context) so the scanner never has to deal with OCM lookup itself.
+    `scan_ocm_resource` is a concrete dispatch method that handles all OCM/OCI access-type
+    branching and blob-fetching. Subclasses implement the content-typed hooks below.
 
-    `oci_client` is passed through to access OCI artefacts.
-    For binary scans of OCI images the scanner uses `oci_client.credentials_lookup` to obtain
-    `username`/`password` and passes them to the CLI.
-    For local or OCI blobs the scanner streams the blob bytes through `oci_client.blob()`.
+    The `*_stream` hooks have default implementations that write the blob to a temp file
+    and call the corresponding `*_archive` / `scan_file` hook. Scanners that support streaming
+    input can override the `*_stream` hooks directly to avoid writing to disk.
     """
 
-    def scan_binary(
+    def scan_ocm_resource(
         self,
         resource_node: ocm.iter.ResourceNode,
         oci_client: object,
+        secret_factory=None,
+        aws_secret_name: str | None = None,
     ) -> dict:
         """
-        Run a direct binary/image scan and return the CycloneDX JSON document as a dict.
+        Dispatch to the appropriate scan hook based on OCM resource type, access type, and mediaType.
 
-        Called when `scan_target` is BINARY or as the fallback in SBOM_WITH_BINARY_FALLBACK
-        when no SBOM is available.
+        ArtefactType.SBOM + OCI_REGISTRY → fetch SBOM blob from OCI manifest → scan_sbom
+        OCI_REGISTRY → scan_oci_image (by reference, no blob fetch)
+        LOCAL_BLOB / OCI_BLOB / S3 with OCI image mediaType → scan_oci_image_archive_stream
+        LOCAL_BLOB / OCI_BLOB / S3 with everything else → scan_file_stream
         """
-        raise NotImplementedError(f'{type(self).__name__} does not support binary scanning')
+        access = resource_node.resource.access
 
-    def scan_sbom(self, sbom_cyclonedx: dict) -> dict:
+        # SBOM stored as an OCI artifact: fetch the blob from the first manifest layer
+        if resource_node.resource.type == ocm.ArtefactType.SBOM:
+            sbom = _fetch_oci_sbom(resource_node=resource_node, oci_client=oci_client)
+            if sbom is not None:
+                logger.debug('found OCI SBOM artifact, routing to scan_sbom')
+                return self.scan_sbom(sbom)
+
+        if access.type is ocm.AccessType.OCI_REGISTRY:
+            logger.debug(f'scanning OCI image {access.imageReference!r}')
+            return self.scan_oci_image(access.imageReference)
+
+        try:
+            blob_descriptors = ocm_util.iter_blob_descriptors(
+                component=resource_node.component,
+                access=access,
+                oci_client=oci_client,
+                secret_factory=secret_factory,
+                aws_secret_name=aws_secret_name,
+            )
+        except RuntimeError as e:
+            raise ValueError(
+                f'unsupported access type {access.type!r} in scan_ocm_resource; '
+                'check extension_cfg.is_supported() configuration',
+            ) from e
+
+        for blob_descriptor in blob_descriptors:
+            media_type = blob_descriptor.media_type or ''
+            logger.debug(
+                f'blob digest={blob_descriptor.digest!r} '
+                f'mediaType={media_type!r} name={blob_descriptor.name!r}',
+            )
+            if media_type in _OCI_IMAGE_MEDIA_TYPES:
+                return self.scan_oci_image_archive_stream(blob_descriptor)
+            is_tar = ocm_util.is_tar_archive(blob_descriptor, resource_node.resource)
+            return self.scan_file_stream(blob_descriptor, is_tar=is_tar)
+
+        raise ValueError(
+            f'unsupported access type {access.type!r} in scan_ocm_resource; '
+            'check extension_cfg.is_supported() configuration',
+        )
+
+    def scan_oci_image(self, image_reference: str) -> dict:
+        """Scan an OCI image by registry reference."""
+        raise NotImplementedError(f'{type(self).__name__} does not support OCI image scanning')
+
+    def scan_oci_image_archive_stream(self, blob: ocm_util.BlobDescriptor) -> dict:
         """
-        Re-scan an existing CycloneDX SBOM and return a new CycloneDX JSON document.
+        Scan an OCI image archive (ASAF tar) from a blob stream.
 
-        Called when `scan_target` is SBOM or SBOM_WITH_BINARY_FALLBACK (primary path).
+        Default: writes blob content to a temp file, calls scan_oci_image_archive(path, blob).
+        Override to consume the stream directly (e.g. pipe to scanner stdin).
+        """
+        media_type = blob.media_type or ''
+        suffix = (
+            '.tar.gz' if media_type.endswith('+gzip') or media_type.endswith('.gzip') else '.tar'
+        )
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
+            tmp_path = f.name
+        try:
+            _chunks_to_file(blob.content, tmp_path)
+            logger.debug(f'scanning OCI image archive {tmp_path!r} (mediaType={media_type!r})')
+            return self.scan_oci_image_archive(tmp_path, blob)
+        finally:
+            os.unlink(tmp_path)
+
+    def scan_oci_image_archive(self, path: str, blob: ocm_util.BlobDescriptor) -> dict:
+        """Scan an OCI image archive (ASAF tar) from a local file path."""
+        raise NotImplementedError(
+            f'{type(self).__name__} does not support OCI image archive scanning',
+        )
+
+    def scan_file_stream(self, blob: ocm_util.BlobDescriptor, is_tar: bool) -> dict:
+        """
+        Scan an arbitrary file (binary, filesystem tar, etc.) from a blob stream.
+
+        Default: writes blob content to a temp file, calls scan_file(path, blob, is_tar).
+        Override to consume the stream directly (e.g. pipe to scanner stdin).
+        """
+        with tempfile.NamedTemporaryFile(delete=False) as f:
+            tmp_path = f.name
+        try:
+            _chunks_to_file(blob.content, tmp_path)
+            logger.debug(f'scanning file {tmp_path!r} (mediaType={blob.media_type!r}, {is_tar=})')
+            return self.scan_file(tmp_path, blob, is_tar=is_tar)
+        finally:
+            os.unlink(tmp_path)
+
+    def scan_file(self, path: str, blob: ocm_util.BlobDescriptor, is_tar: bool) -> dict:
+        """Scan an arbitrary file (binary, filesystem tar, etc.) from a local file path."""
+        raise NotImplementedError(f'{type(self).__name__} does not support file scanning')
+
+    def scan_sbom(self, data: dict) -> dict:
+        """
+        Scan an existing SBOM (CycloneDX or SPDX) and return a new CycloneDX document.
+
+        Called when scan_target is SBOM or SBOM_WITH_BINARY_FALLBACK (primary path),
+        or when the resource itself is an SBOM OCI artefact.
         """
         raise NotImplementedError(f'{type(self).__name__} does not support SBOM scanning')
 
@@ -96,7 +203,11 @@ def run_scan(
         Used as the primary key namespace for all DB records written by this scanner
     """
     if not vulnerability_cfg or not vulnerability_cfg.matches(artefact):
-        logger.debug(f'vulnerability finding cfg filters out {artefact=}, skipping')
+        logger.info(
+            f'[{datasource}] {artefact.component_name}:{artefact.component_version} '
+            f'resource={artefact.artefact.artefact_name!r} '
+            f'skipped: vulnerability_cfg does not match',
+        )
         return
 
     if not extension_cfg.is_supported(artefact_kind=artefact.artefact_kind):
@@ -105,6 +216,11 @@ def run_scan(
                 f'{artefact.artefact_kind} is not supported by {datasource}, '
                 'adjust filter configuration to exclude this artefact kind',
             )
+        logger.info(
+            f'[{datasource}] {artefact.component_name}:{artefact.component_version} '
+            f'resource={artefact.artefact.artefact_name!r} '
+            f'skipped: artefact_kind={artefact.artefact_kind!r} not supported',
+        )
         return
 
     resource_node = k8s.util.get_ocm_node(
@@ -113,18 +229,27 @@ def run_scan(
     )
     access = resource_node.resource.access
 
-    if not extension_cfg.is_supported(access_type=access.type):
+    if not extension_cfg.is_supported(
+        access_type=access.type,
+        artefact_type=resource_node.resource.type,
+    ):
         if extension_cfg.on_unsupported is odg.extensions_cfg.WarningVerbosities.FAIL:
             raise TypeError(
                 f'{access.type} is not supported by {datasource}, '
                 'adjust filter configuration to exclude this access type',
             )
+        resource = resource_node.resource
+        logger.info(
+            f'[{datasource}] {artefact.component_name}:{artefact.component_version} '
+            f'resource={resource.name!r} type={resource.type!r} '
+            f'access_type={access.type!r} skipped: not supported',
+        )
         return
 
     scan_target = extension_cfg.scan_target
     cyclonedx: dict | None = None
 
-    if scan_target in (
+    if cyclonedx is None and scan_target in (
         scanner_utils.model.ScanningMode.SBOM,
         scanner_utils.model.ScanningMode.SBOM_WITH_BINARY_FALLBACK,
     ):
@@ -134,18 +259,35 @@ def run_scan(
 
         if sbom is None:
             if scan_target is scanner_utils.model.ScanningMode.SBOM:
-                logger.warning('no SBOM available for %s, raising SbomNotAvailable', artefact)
+                logger.warning(
+                    f'[{datasource}] {artefact.component_name}:{artefact.component_version} '
+                    f'resource={artefact.artefact.artefact_name!r} '
+                    f'no SBOM available, raising SbomNotAvailable',
+                )
                 raise SbomNotAvailable(artefact)
-            logger.debug('no SBOM available for %s, falling back to binary scan', artefact)
+            logger.info(
+                f'[{datasource}] {artefact.component_name}:{artefact.component_version} '
+                f'resource={artefact.artefact.artefact_name!r} '
+                f'no SBOM available, falling back to binary scan',
+            )
 
     if cyclonedx is None:
-        cyclonedx = scanner.scan_binary(resource_node=resource_node, oci_client=oci_client)
+        cyclonedx = scanner.scan_ocm_resource(resource_node=resource_node, oci_client=oci_client)
 
     findings = list(
         scanner_utils.cyclonedx.parse_vulnerability_findings(
             cyclonedx=cyclonedx,
             vulnerability_cfg=vulnerability_cfg,
         ),
+    )
+
+    resource = resource_node.resource
+    logger.info(
+        f'[{datasource}] {artefact.component_name}:{artefact.component_version} '
+        f'resource={resource.name!r} type={resource.type!r} '
+        f'scan_target={scan_target} '
+        f'raw_cves={len(cyclonedx.get("vulnerabilities") or [])} '
+        f'findings_after_cfg={len(findings)}',
     )
 
     finding_artefact_ref = odg.model.component_artefact_id_from_ocm(
@@ -191,7 +333,13 @@ def run_scan(
         delivery_service_client=delivery_service_client,
     )
 
-    logger.debug(f'finished scan of {artefact}')
+    logger.debug(f'[{datasource}] {artefact.component_name}:{artefact.component_version} finished')
+
+
+def _chunks_to_file(chunks, path: str) -> None:
+    with open(path, 'wb') as f:
+        for chunk in chunks:
+            f.write(chunk)
 
 
 def _fetch_sbom(
@@ -210,3 +358,22 @@ def _fetch_sbom(
         return None
     sbom_bytes = delivery_service_client.get_blob(digest=digest)
     return json.loads(sbom_bytes)
+
+
+def _fetch_oci_sbom(
+    resource_node: ocm.iter.ResourceNode,
+    oci_client,
+) -> dict | None:
+    access = resource_node.resource.access
+    if access.type is not ocm.AccessType.OCI_REGISTRY:
+        return None
+    manifest = oci_client.manifest(image_reference=access.imageReference)
+    if not manifest.layers:
+        return None
+    layer = manifest.layers[0]
+    blob = oci_client.blob(
+        image_reference=access.imageReference,
+        digest=layer.digest,
+        stream=True,
+    )
+    return json.loads(b''.join(blob.iter_content(chunk_size=4096)))

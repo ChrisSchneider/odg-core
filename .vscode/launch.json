@@ -37,7 +37,8 @@
         "malware",
         "odg_operator",
         "osid_extension",
-        "responsibles_extension"
+        "responsibles_extension",
+        "trivy_extension"
       ]
     }
   ]

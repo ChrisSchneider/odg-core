@@ -14,3 +14,5 @@ RUN apt-get update \
 RUN mkdir -p /home/vscode/.kube && chown vscode /home/vscode/.kube
 
 RUN pip3 install uv==0.12.3
+
+COPY --from=aquasec/trivy:latest /usr/local/bin/trivy /usr/local/bin/trivy

@@ -70,7 +70,7 @@ class Datatype(enum.StrEnum):
             Datatype.MALWARE_FINDING: Datasource.CLAMAV,
             Datatype.OSID_FINDING: Datasource.OSID,
             Datatype.SAST_FINDING: Datasource.SAST,
-            Datatype.VULNERABILITY_FINDING: Datasource.BDBA,
+            Datatype.VULNERABILITY_FINDING: Datasource.TRIVY,
         }[self]
 
     def display_name(self) -> str:
@@ -95,6 +95,7 @@ class Datasource(enum.StrEnum):
     SAST = 'sast'
     SBOM_GENERATOR = 'sbom-generator'
     SLA_VIOLATION_PROFILER = 'sla-violation-profiler'
+    TRIVY = 'trivy'
     ODG = 'odg'
 
     def datatypes(self) -> tuple[Datatype, ...]:
@@ -122,6 +123,7 @@ class Datasource(enum.StrEnum):
             Datasource.KYVERNO: (Datatype.KYVERNO_FINDING,),
             Datasource.RESPONSIBLES: (Datatype.RESPONSIBLES,),
             Datasource.SAST: (Datatype.SAST_FINDING,),
+            Datasource.TRIVY: (Datatype.VULNERABILITY_FINDING,),
         }.get(self, tuple())
 
 

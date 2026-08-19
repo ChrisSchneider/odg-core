@@ -1,3 +1,4 @@
+import json
 import unittest.mock
 
 import ocm
@@ -5,6 +6,7 @@ import ocm.iter
 import pytest
 
 import consts
+import ocm_util
 import odg.findings
 import odg.labels
 import odg.model
@@ -1008,19 +1010,26 @@ import scanner_utils.orchestrator
 
 
 class _FakeScanner(scanner_utils.orchestrator.Scanner):
-    """Minimal Scanner that returns a canned CycloneDX document."""
+    """Minimal Scanner that records leaf-hook calls and returns a canned CycloneDX document."""
 
     def __init__(self, cyclonedx: dict | None = None):
         self._cyclonedx = cyclonedx or {}
-        self.binary_calls: list = []
-        self.sbom_calls: list = []
+        self.calls: list = []
 
-    def scan_binary(self, resource_node, oci_client) -> dict:
-        self.binary_calls.append((resource_node, oci_client))
+    def scan_oci_image(self, image_reference: str) -> dict:
+        self.calls.append(('scan_oci_image', image_reference))
         return self._cyclonedx
 
-    def scan_sbom(self, sbom_cyclonedx: dict) -> dict:
-        self.sbom_calls.append(sbom_cyclonedx)
+    def scan_oci_image_archive(self, path: str, blob) -> dict:
+        self.calls.append(('scan_oci_image_archive', path, blob.media_type))
+        return self._cyclonedx
+
+    def scan_file(self, path: str, blob, is_tar: bool) -> dict:
+        self.calls.append(('scan_file', path, blob.media_type, is_tar))
+        return self._cyclonedx
+
+    def scan_sbom(self, data: dict) -> dict:
+        self.calls.append(('scan_sbom', data))
         return self._cyclonedx
 
 
@@ -1096,24 +1105,19 @@ class TestRunScan:
     def test_skips_when_vulnerability_cfg_is_none(self, vulnerability_cfg):
         scanner = _FakeScanner()
         self._run(vulnerability_cfg=None, scanner=scanner)
-        assert scanner.binary_calls == []
+        assert scanner.calls == []
 
     def test_skips_when_artefact_kind_not_supported(self, vulnerability_cfg):
         scanner = _FakeScanner()
         kwargs = self._make_kwargs(vulnerability_cfg, scanner)
         kwargs['extension_cfg'].is_supported.side_effect = (
-            lambda artefact_kind=None, access_type=None: (
+            lambda artefact_kind=None, access_type=None, artefact_type=None: (
                 artefact_kind is None
-            )  # only access_type check passes
+            )  # only access_type/artefact_type check passes
         )
         with unittest.mock.patch('k8s.util.get_ocm_node', return_value=self._make_resource_node()):
             scanner_utils.orchestrator.run_scan(**kwargs)
-        assert scanner.binary_calls == []
-
-    def test_calls_scan_binary_for_binary_mode(self, vulnerability_cfg):
-        scanner = _FakeScanner()
-        self._run(vulnerability_cfg, scanner)
-        assert len(scanner.binary_calls) == 1
+        assert scanner.calls == []
 
     def test_update_metadata_called_with_scan_info_and_findings(self, vulnerability_cfg):
         cve_doc = TestIterVulnerabilityFindings._make_cyclonedx()
@@ -1142,8 +1146,6 @@ class TestRunScan:
         assert all(f.artefact.component_version is None for f in findings)
 
     def test_sbom_mode_calls_scan_sbom_when_sbom_available(self, vulnerability_cfg):
-        import json
-
         sbom_payload = {'bomFormat': 'CycloneDX', 'specVersion': '1.5'}
         scanner = _FakeScanner()
         kwargs = self._make_kwargs(
@@ -1158,8 +1160,7 @@ class TestRunScan:
         kwargs['delivery_service_client'].get_blob.return_value = json.dumps(sbom_payload).encode()
         with unittest.mock.patch('k8s.util.get_ocm_node', return_value=self._make_resource_node()):
             scanner_utils.orchestrator.run_scan(**kwargs)
-        assert scanner.sbom_calls == [sbom_payload]
-        assert scanner.binary_calls == []
+        assert scanner.calls == [('scan_sbom', sbom_payload)]
 
     def test_sbom_with_binary_fallback_falls_back_when_no_sbom(self, vulnerability_cfg):
         scanner = _FakeScanner()
@@ -1172,8 +1173,8 @@ class TestRunScan:
                 scan_target=scanner_utils.model.ScanningMode.SBOM_WITH_BINARY_FALLBACK,
             ),
         )
-        assert scanner.binary_calls != []
-        assert scanner.sbom_calls == []
+        assert any(c[0] == 'scan_oci_image' for c in scanner.calls)
+        assert not any(c[0] == 'scan_sbom' for c in scanner.calls)
 
     def test_stale_findings_are_deleted(self, vulnerability_cfg):
         scanner = _FakeScanner(cyclonedx={})
@@ -1206,3 +1207,90 @@ class TestRunScan:
         kwargs['delivery_service_client'].delete_metadata.assert_called_once()
         deleted = kwargs['delivery_service_client'].delete_metadata.call_args.kwargs['data']
         assert stale in deleted
+
+
+# ---------------------------------------------------------------------------
+# Tests — Scanner.scan_ocm_resource dispatch
+# ---------------------------------------------------------------------------
+
+
+class TestScannerDispatch:
+    """Tests for the routing logic in Scanner.scan_ocm_resource that we own."""
+
+    @staticmethod
+    def _make_node(resource):
+        component = ocm.Component(
+            name='example.org/comp', version='1.0',
+            repositoryContexts=[ocm.OciOcmRepository(baseUrl='example.org')],
+            provider='test',
+            sources=[], componentReferences=[], resources=[],
+        )
+        return ocm.iter.ResourceNode(
+            path=(ocm.iter.NodePathEntry(component=component),),
+            resource=resource,
+        )
+
+    @staticmethod
+    def _blob_descriptor(media_type: str) -> ocm_util.BlobDescriptor:
+        return ocm_util.BlobDescriptor(
+            content=iter([b'data']),
+            size=4,
+            media_type=media_type,
+        )
+
+    def test_oci_registry_routes_to_scan_oci_image(self):
+        resource = ocm.Resource(
+            name='img', version='1.0', type=ocm.ArtefactType.OCI_IMAGE,
+            access=ocm.OciAccess(imageReference='example.org/img:1.0'),
+        )
+        scanner = _FakeScanner()
+        scanner.scan_ocm_resource(self._make_node(resource), unittest.mock.Mock())
+        assert scanner.calls == [('scan_oci_image', 'example.org/img:1.0')]
+
+    def test_oci_image_media_type_routes_to_scan_oci_image_archive(self):
+        media_type = 'application/vnd.oci.image.manifest.v1+tar+gzip'
+        resource = ocm.Resource(
+            name='img', version='1.0', type=ocm.ArtefactType.OCI_IMAGE,
+            access=ocm.LocalBlobAccess(localReference='sha256:abc', mediaType=media_type, size=1),
+        )
+        with unittest.mock.patch(
+            'ocm_util.iter_blob_descriptors',
+            return_value=iter([self._blob_descriptor(media_type)]),
+        ):
+            scanner = _FakeScanner()
+            scanner.scan_ocm_resource(self._make_node(resource), unittest.mock.Mock())
+        assert scanner.calls[0][0] == 'scan_oci_image_archive'
+
+    def test_tar_blob_routes_to_scan_file_with_is_tar_true(self):
+        media_type = 'application/x-tar'
+        resource = ocm.Resource(
+            name='tree', version='1.0', type=ocm.ArtefactType.DIRECTORY_TREE,
+            access=ocm.LocalBlobAccess(localReference='sha256:def', mediaType=media_type, size=1),
+        )
+        with unittest.mock.patch(
+            'ocm_util.iter_blob_descriptors',
+            return_value=iter([self._blob_descriptor(media_type)]),
+        ):
+            scanner = _FakeScanner()
+            scanner.scan_ocm_resource(self._make_node(resource), unittest.mock.Mock())
+        assert scanner.calls[0][0] == 'scan_file'
+        assert scanner.calls[0][3] is True  # is_tar
+
+    def test_sbom_artefact_type_routes_to_scan_sbom(self):
+        sbom_payload = {'bomFormat': 'CycloneDX', 'specVersion': '1.5'}
+        resource = ocm.Resource(
+            name='sbom', version='1.0', type=ocm.ArtefactType.SBOM,
+            access=ocm.OciAccess(imageReference='example.org/sbom:1.0'),
+        )
+        layer = unittest.mock.Mock()
+        layer.digest = 'sha256:abc123'
+        manifest = unittest.mock.Mock()
+        manifest.layers = [layer]
+        blob_response = unittest.mock.Mock()
+        blob_response.iter_content.return_value = [json.dumps(sbom_payload).encode()]
+        oci_client = unittest.mock.Mock()
+        oci_client.manifest.return_value = manifest
+        oci_client.blob.return_value = blob_response
+        scanner = _FakeScanner()
+        scanner.scan_ocm_resource(self._make_node(resource), oci_client)
+        assert scanner.calls == [('scan_sbom', sbom_payload)]

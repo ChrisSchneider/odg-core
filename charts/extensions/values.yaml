@@ -170,3 +170,13 @@ sla-violation-profiler:
   successful_jobs_history_limit: null
   failed_jobs_history_limit: null
   backoff_limit: null
+trivy:
+  deployment:
+    annotations: []
+    resources:
+      requests:
+        memory: 300Mi
+        cpu: 250m
+      limits:
+        memory: 1Gi
+  enabled: false
