@@ -1,4 +1,4 @@
-.PHONY: help setup lint format test build-clients build-core build-docker build-docker-local .check-build-prereqs run-db run clean
+.PHONY: help setup lint lint-staged format format-staged test build-clients build-core build-docker build-docker-local .check-build-prereqs run-db run clean
 
 # Configuration variables with defaults
 DB_PASSWORD ?= MyPassword
@@ -12,16 +12,18 @@ SERVER_PORT ?= 5000
 help:
 	@echo "Available targets:"
 	@echo "  setup         - Install development dependencies"
-	@echo "  lint          - Run ruff and bandit linters"
-	@echo "  format        - Check code formatting with ruff"
-	@echo "  test          - Run pytest test suite"
-	@echo "  build-clients - Build bdba and odg client packages"
-	@echo "  build-core    - Build odg-core-libs package"
-	@echo "  build-docker  - Build Docker image for amd64 and arm64"
+	@echo "  lint           - Run ruff and bandit linters"
+	@echo "  lint-staged    - Run ruff linter on staged files only"
+	@echo "  format         - Check code formatting with ruff"
+	@echo "  format-staged  - Check and apply formatting to staged files only"
+	@echo "  test           - Run pytest test suite"
+	@echo "  build-clients  - Build bdba and odg client packages"
+	@echo "  build-core     - Build odg-core-libs package"
+	@echo "  build-docker   - Build Docker image"
 	@echo "  build-docker-local - Build Docker image for current architecture only"
-	@echo "  run-db        - Run a PostgreSQL database instance"
-	@echo "  run           - Run the development server"
-	@echo "  clean         - Remove build artifacts"
+	@echo "  run-db         - Run a PostgreSQL database instance"
+	@echo "  run            - Run the development server"
+	@echo "  clean          - Remove build artifacts"
 	@echo ""
 	@echo "Run target options (with defaults):"
 	@echo "  DB_PASSWORD=<password>  (default: MyPassword)"
@@ -59,17 +61,65 @@ setup:
 # Linting
 lint:
 	@echo "Running linters..."
-	@.ci/lint
+	@echo "Running ruff for all python modules..."
+	@if ruff check .; then \
+		echo "ruff succeeded"; \
+	else \
+		echo "ruff failed"; \
+		exit 1; \
+	fi
+	@echo "Running bandit (sast-linter) for all modules..."
+	@if bandit --configfile pyproject.toml --recursive .; then \
+		echo "bandit succeeded"; \
+	else \
+		echo "bandit failed"; \
+		exit 1; \
+	fi
+
+# Linting for staged files only (used by pre-commit hook)
+lint-staged:
+	@echo "Running ruff lint on staged files..."
+	@STAGED=$$(git diff --cached --name-only --diff-filter=ACMR | grep '\.py$$' || true); \
+	if [ -z "$$STAGED" ]; then \
+		echo "No staged Python files to lint"; \
+		exit 0; \
+	fi; \
+	ruff check --fix -- $$STAGED
 
 # Format checking
 format:
 	@echo "Checking code formatting..."
-	@.ci/check-format
+	@if ! ruff format --check .; then \
+		echo ""; \
+		echo "=============================================="; \
+		echo " run 'ruff format' to apply suggested changes "; \
+		echo "=============================================="; \
+		exit 1; \
+	fi
+
+# Format staged files only (used by pre-commit hook)
+format-staged:
+	@echo "Formatting staged files..."
+	@STAGED=$$(git diff --cached --name-only --diff-filter=ACMR | grep '\.py$$' || true); \
+	if [ -z "$$STAGED" ]; then \
+		echo "No staged Python files to format"; \
+		exit 0; \
+	fi; \
+	ruff format -- $$STAGED
 
 # Testing
 test:
 	@echo "Running tests..."
-	@bash .ci/test
+	@if ! which pytest >/dev/null 2>&1; then \
+		echo "pytest is required (install with pip(3) install pytest)"; \
+		exit 1; \
+	fi
+	@if PYTHONPATH=$(CURDIR):$$PYTHONPATH pytest $(CURDIR); then \
+		echo "Unittest executions succeeded"; \
+	else \
+		echo "Errors were found whilst executing unittests (see above)"; \
+		exit 1; \
+	fi
 
 # Build client packages (bdba and odg)
 build-clients:
