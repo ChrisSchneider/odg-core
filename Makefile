@@ -64,9 +64,9 @@ lint:
 	@echo "Running linters..."
 	@echo "Running ruff for all python modules..."
 	@if uv run ruff check .; then \
-		echo "ruff succeeded"; \
+		echo "ruff check succeeded"; \
 	else \
-		echo "ruff failed"; \
+		echo "ruff check failed, apply suggested fixes with: uv run ruff check --fix"; \
 		exit 1; \
 	fi
 	@echo "Running bandit (sast-linter) for all modules..."
@@ -97,7 +97,7 @@ format:
 	@if ! uv run ruff format --check .; then \
 		echo ""; \
 		echo "=============================================="; \
-		echo " run 'ruff format' to apply suggested changes "; \
+		echo " run 'uv run ruff format' to apply suggested changes "; \
 		echo "=============================================="; \
 		exit 1; \
 	fi
