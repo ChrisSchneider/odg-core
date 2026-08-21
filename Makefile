@@ -62,14 +62,14 @@ setup:
 lint:
 	@echo "Running linters..."
 	@echo "Running ruff for all python modules..."
-	@if ruff check .; then \
+	@if uv run ruff check .; then \
 		echo "ruff succeeded"; \
 	else \
 		echo "ruff failed"; \
 		exit 1; \
 	fi
 	@echo "Running bandit (sast-linter) for all modules..."
-	@if bandit --configfile pyproject.toml --recursive .; then \
+	@if uv run bandit --configfile pyproject.toml --recursive .; then \
 		echo "bandit succeeded"; \
 	else \
 		echo "bandit failed"; \
@@ -84,12 +84,12 @@ lint-staged:
 		echo "No staged Python files to lint"; \
 		exit 0; \
 	fi; \
-	ruff check --fix -- $$STAGED
+	uv run ruff check --fix -- $$STAGED
 
 # Format checking
 format:
 	@echo "Checking code formatting..."
-	@if ! ruff format --check .; then \
+	@if ! uv run ruff format --check .; then \
 		echo ""; \
 		echo "=============================================="; \
 		echo " run 'ruff format' to apply suggested changes "; \
@@ -105,16 +105,12 @@ format-staged:
 		echo "No staged Python files to format"; \
 		exit 0; \
 	fi; \
-	ruff format -- $$STAGED
+	uv run ruff format -- $$STAGED
 
 # Testing
 test:
 	@echo "Running tests..."
-	@if ! which pytest >/dev/null 2>&1; then \
-		echo "pytest is required (install with pip(3) install pytest)"; \
-		exit 1; \
-	fi
-	@if PYTHONPATH=$(CURDIR):$$PYTHONPATH pytest $(CURDIR); then \
+	@if PYTHONPATH=$(CURDIR):$$PYTHONPATH uv run pytest $(CURDIR); then \
 		echo "Unittest executions succeeded"; \
 	else \
 		echo "Errors were found whilst executing unittests (see above)"; \
