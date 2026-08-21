@@ -69,7 +69,7 @@ lint:
 		exit 1; \
 	fi
 	@echo "Running bandit (sast-linter) for all modules..."
-	@if uv run bandit --configfile pyproject.toml --recursive .; then \
+	@if uv run bandit --configfile pyproject.toml --recursive . $(bandit_extra_args); then \
 		echo "bandit succeeded"; \
 	else \
 		echo "bandit failed"; \
