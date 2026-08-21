@@ -80,16 +80,21 @@ lint:
 # Linting for staged files only (used by pre-commit hook)
 lint-staged:
 	@echo "Running ruff lint on staged files..."
-	@mkdir -p /tmp/pre-commit-$$$$; \
-	git diff --cached --name-only -z --diff-filter=ACMR -- '*.py' | while IFS= read -r -d '' file; do \
-		mkdir -p "/tmp/pre-commit-$$$$/$(dirname "$$file")"; \
+	@bash -c 'set -e; \
+	mkdir -p /tmp/pre-commit-$$$$; \
+	status=0; \
+	while IFS= read -r -d "" file; do \
+		mkdir -p "/tmp/pre-commit-$$$$/$$( dirname "$$file" )"; \
 		git show ":$$file" > "/tmp/pre-commit-$$$$/$$file"; \
 		if uv run ruff check --fix "/tmp/pre-commit-$$$$/$$file"; then \
 			HASH=$$(git hash-object -w "/tmp/pre-commit-$$$$/$$file"); \
 			git update-index --cacheinfo 100644,$$HASH,"$$file"; \
+		else \
+			status=1; \
 		fi; \
-	done; \
-	rm -rf /tmp/pre-commit-$$$$
+	done < <(git diff --cached --name-only -z --diff-filter=ACMR -- "*.py"); \
+	rm -rf /tmp/pre-commit-$$$$; \
+	exit $$status'
 
 # Format checking
 format:
@@ -105,16 +110,21 @@ format:
 # Format staged files only (used by pre-commit hook)
 format-staged:
 	@echo "Formatting staged files..."
-	@mkdir -p /tmp/pre-commit-$$$$; \
-	git diff --cached --name-only -z --diff-filter=ACMR -- '*.py' | while IFS= read -r -d '' file; do \
-		mkdir -p "/tmp/pre-commit-$$$$/$(dirname "$$file")"; \
+	@bash -c 'set -e; \
+	mkdir -p /tmp/pre-commit-$$$$; \
+	status=0; \
+	while IFS= read -r -d "" file; do \
+		mkdir -p "/tmp/pre-commit-$$$$/$$( dirname "$$file" )"; \
 		git show ":$$file" > "/tmp/pre-commit-$$$$/$$file"; \
 		if uv run ruff format "/tmp/pre-commit-$$$$/$$file"; then \
 			HASH=$$(git hash-object -w "/tmp/pre-commit-$$$$/$$file"); \
 			git update-index --cacheinfo 100644,$$HASH,"$$file"; \
+		else \
+			status=1; \
 		fi; \
-	done; \
-	rm -rf /tmp/pre-commit-$$$$
+	done < <(git diff --cached --name-only -z --diff-filter=ACMR -- "*.py"); \
+	rm -rf /tmp/pre-commit-$$$$; \
+	exit $$status'
 
 # Testing
 test:
