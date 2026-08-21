@@ -119,7 +119,7 @@ format-staged:
 # Testing
 test:
 	@echo "Running tests..."
-	@if PYTHONPATH=$(CURDIR):$$PYTHONPATH uv run pytest $(CURDIR); then \
+	@if PYTHONPATH="$(CURDIR):$$PYTHONPATH" uv run pytest "$(CURDIR)"; then \
 		echo "Unittest executions succeeded"; \
 	else \
 		echo "Errors were found whilst executing unittests (see above)"; \
