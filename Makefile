@@ -55,6 +55,7 @@ setup:
 		printf 'public_key: |\n'; \
 		echo "$${public_key}" | sed 's/^/  /'; \
 	} > src/secrets/signing-cfg/local.yaml
+	@echo "Installing git hooks..."
 	@git config core.hooksPath .githooks
 	@echo "Setup complete"
 
