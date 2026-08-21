@@ -88,7 +88,8 @@ lint-staged:
 		git show ":$$file" > "/tmp/pre-commit-$$$$/$$file"; \
 		if uv run ruff check --fix "/tmp/pre-commit-$$$$/$$file"; then \
 			HASH=$$(git hash-object -w "/tmp/pre-commit-$$$$/$$file"); \
-			git update-index --cacheinfo 100644,$$HASH,"$$file"; \
+			MODE=$$(git ls-files --stage -z "$$file" | cut -d" " -f1); \
+			git update-index --cacheinfo $$MODE,$$HASH,"$$file"; \
 		else \
 			status=1; \
 		fi; \
@@ -118,7 +119,8 @@ format-staged:
 		git show ":$$file" > "/tmp/pre-commit-$$$$/$$file"; \
 		if uv run ruff format "/tmp/pre-commit-$$$$/$$file"; then \
 			HASH=$$(git hash-object -w "/tmp/pre-commit-$$$$/$$file"); \
-			git update-index --cacheinfo 100644,$$HASH,"$$file"; \
+			MODE=$$(git ls-files --stage -z "$$file" | cut -d" " -f1); \
+			git update-index --cacheinfo $$MODE,$$HASH,"$$file"; \
 		else \
 			status=1; \
 		fi; \
