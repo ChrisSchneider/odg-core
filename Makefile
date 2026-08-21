@@ -79,12 +79,8 @@ lint:
 # Linting for staged files only (used by pre-commit hook)
 lint-staged:
 	@echo "Running ruff lint on staged files..."
-	@STAGED=$$(git diff --cached --name-only --diff-filter=ACMR | grep '\.py$$' || true); \
-	if [ -z "$$STAGED" ]; then \
-		echo "No staged Python files to lint"; \
-		exit 0; \
-	fi; \
-	uv run ruff check --fix -- $$STAGED
+	@git diff --cached --name-only -z --diff-filter=ACMR -- '*.py' | \
+		xargs -0 --no-run-if-empty uv run ruff check --fix --
 
 # Format checking
 format:
@@ -100,12 +96,8 @@ format:
 # Format staged files only (used by pre-commit hook)
 format-staged:
 	@echo "Formatting staged files..."
-	@STAGED=$$(git diff --cached --name-only --diff-filter=ACMR | grep '\.py$$' || true); \
-	if [ -z "$$STAGED" ]; then \
-		echo "No staged Python files to format"; \
-		exit 0; \
-	fi; \
-	uv run ruff format -- $$STAGED
+	@git diff --cached --name-only -z --diff-filter=ACMR -- '*.py' | \
+		xargs -0 --no-run-if-empty uv run ruff format --
 
 # Testing
 test:
