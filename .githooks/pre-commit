@@ -13,7 +13,4 @@ make format-staged
 echo "pre-commit: running ruff lint (auto-fix)..."
 make lint-staged || RUFF_STATUS=$?
 
-# Re-stage any files that were just modified (even if lint has remaining violations)
-git add -- "${STAGED[@]}"
-
 exit "${RUFF_STATUS:-0}"
