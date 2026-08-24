@@ -23,6 +23,13 @@ Then ask the user for:
 Then implement the following, replacing SCANNER with the scanner name and SCANNER_NAME with its
 camelCase Services enum value:
 
+## 0. Deep research on Scanner CLI commands
+
+Do not assume how the commands are structured and how they work, research before you start implementing:
+
+- How to scan different artefact types?
+- How to output vulnerability findings in CycloneDX format?
+
 ## 1. src/odg/model.py
 
 Add `SCANNER = 'scanner'` to the `Datasource` StrEnum (keep alphabetical order), and add
@@ -267,6 +274,9 @@ SCANNER:
 ```
 
 If finished, lint the Helm chart with `helm lint`
+
+If CVE scanners such as Trivy download their CVE database upon starting,
+think about how you could cache the signatures during Pods restarts (e.g. `emptyDir`).
 
 ## Key rules
 
