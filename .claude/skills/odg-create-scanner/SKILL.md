@@ -275,8 +275,8 @@ SCANNER:
 
 If finished, lint the Helm chart with `helm lint`
 
-If CVE scanners such as Trivy download their CVE database upon starting,
-think about how you could cache the signatures during Pods restarts (e.g. `emptyDir`).
+If the CVE scanner (e.g. Trivy) downloads their CVE database on startup, ensure
+the signatures during Pods restarts are cached at least per Node (e.g. `emptyDir`).
 
 ## Key rules
 
