@@ -1,9 +1,21 @@
 ---
+name: odg-create-scanner
 description: Scaffold a new CycloneDX-based vulnerability scanner extension
 ---
 You are scaffolding a new vulnerability scanner extension for ODG (Open Delivery Gear).
 
-Ask the user for:
+Start by briefly introducing what you are about to build together, so the user has context before
+answering the setup questions. Explain:
+
+- A scanner extension is a self-contained Python package (`src/SCANNER_extension/`) that wraps a
+  CLI-based vulnerability scanner and feeds its results into ODG as `VulnerabilityFinding` records.
+- It integrates via the standard backlog/orchestrator pattern: the artefact enumerator creates
+  backlog items, the extension processes them by calling the scanner CLI, and `scanner_utils`
+  converts the CycloneDX output into findings stored in the delivery-db.
+- The end result includes: `scanner.py` (subprocess wrapper), `__main__.py` (entry point), a Helm
+  chart, and wiring in `model.py`, `extensions_cfg.py`, and `artefact_enumerator.py`.
+
+Then ask the user for:
 1. Scanner name (e.g. "trivy", "grype") — used for package names, class names, and the datasource key
 2. Scanner CLI install snippet for the Dockerfile (or "skip" if not needed yet)
 3. Which scanning modes to support: binary, sbom, sbom_with_binary_fallback (default: all three)
@@ -138,6 +150,21 @@ def _run_scanner(args: list[str], timeout: int = 600) -> dict:
         result.check_returncode()
     return json.loads(result.stdout)
 ```
+
+After implementing the scanner, ask the user whether they want unit tests written for it. If yes,
+write `src/test/test_scanner_extension.py` covering the implemented methods, for example:
+
+- **`scan_sbom`** — pass a minimal CycloneDX dict (with at least one component that has a known
+  CVE purl) and assert the returned dict contains the expected vulnerability findings.
+- **`scan_file`** — call with different `blob.media_type` values, stored at a `tmp_path` fixture:
+  - an executable (`application/octet-stream`) with a known CVE
+  - a plain text file
+- **`scan_oci_image`** — pass a well-known public image reference with a known CVE
+- **`scan_oci_image_archive`** — write a minimal OCI image with a well-known CVE as tar to a `tmp_path` fixture
+
+First run these tests without mocking `_run_scanner` until the scanner produces the expected results. Then rewrite them to use `unittest.mock.patch` to mock `_run_scanner` (or `subprocess.run`) so tests do not require
+the scanner binary or actual artifact downloads. Keep fixtures minimal — a two-component CycloneDX dict is enough for SBOM
+tests.
 
 ## 6. src/scanner_extension/__main__.py
 
