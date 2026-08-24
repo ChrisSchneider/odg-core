@@ -20,30 +20,11 @@ import odg.findings
 import odg.model
 import odg_client
 import rescore.utility
+import scanner_utils.findings
 
 
 logger = logging.getLogger(__name__)
 ci.log.configure_default_logging(print_thread_id=True)
-
-
-def iter_existing_findings(
-    delivery_service_client: odg_client.DeliveryServiceClient,
-    resource_node: ocm.iter.ResourceNode,
-    finding_type: odg.model.Datatype | tuple[odg.model.Datatype],
-    datasource: odg.model.Datasource = odg.model.Datasource.BDBA,
-) -> collections.abc.Generator[odg.model.ArtefactMetadata, None, None]:
-    artefact = odg.model.component_artefact_id_from_ocm(
-        component=resource_node.component_id,
-        artefact=resource_node.resource,
-    )
-
-    findings_raw = delivery_service_client.query_metadata(
-        artefacts=(artefact,),
-        type=finding_type,
-        datasource=datasource,
-    )
-
-    return (odg.model.ArtefactMetadata.from_dict(finding_raw) for finding_raw in findings_raw)
 
 
 def iter_artefact_metadata(
@@ -80,13 +61,14 @@ def iter_artefact_metadata(
 
     existing_findings_by_key = {
         existing_finding.key: existing_finding
-        for existing_finding in iter_existing_findings(
+        for existing_finding in scanner_utils.findings.iter_existing_findings(
             delivery_service_client=delivery_service_client,
             resource_node=scanned_element,
             finding_type=(
                 odg.model.Datatype.VULNERABILITY_FINDING,
                 odg.model.Datatype.LICENSE_FINDING,
             ),
+            datasource=odg.model.Datasource.BDBA,
         )
     }
 
@@ -303,21 +285,11 @@ def iter_artefact_metadata(
     # of the current scan anymore -> those are either solved license findings or (now)
     # historical vulnerability findings (e.g. because a custom version was entered)
 
-    stale_findings = []
-    for existing_finding in existing_findings_by_key.values():
-        for finding in findings:
-            if (
-                existing_finding.meta.type == finding.meta.type
-                and existing_finding.data.key == finding.data.key
-            ):
-                # finding still appeared in current scan result -> keep it
-                break
-        else:
-            # finding did not appear in current scan result -> delete it
-            stale_findings.append(existing_finding)
-
-    if stale_findings:
-        delivery_service_client.delete_metadata(data=stale_findings)
+    scanner_utils.findings.delete_stale_findings(
+        existing_findings_by_key=existing_findings_by_key,
+        current_findings=findings,
+        delivery_service_client=delivery_service_client,
+    )
 
 
 def iter_filesystem_paths(
