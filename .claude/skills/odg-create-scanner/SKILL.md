@@ -266,6 +266,8 @@ SCANNER:
   enabled: false
 ```
 
+If finished, lint the Helm chart with `helm lint`
+
 ## Key rules
 
 - Emit `odg.model.VulnerabilityFinding` — NOT `BDBAVulnerabilityFinding`
