@@ -876,6 +876,33 @@ extensions_cfg:
     # set)
     auto_merge: false
 
+  # @param extensions_cfg.trivy workers which use Trivy to create vulnerability findings
+  trivy:
+    # @param extensions_cfg.trivy.enabled allows disabling of extension without removing its
+    # configuration
+    enabled: true
+    # @param extensions_cfg.trivy.delivery_service_url url to access the delivery-service (cluster
+    # internal url is sufficient)
+    # e.g.
+    # delivery_service_url: http://delivery-service.<namespace>.svc.cluster.local:8080
+    delivery_service_url: ""
+    # @param extensions_cfg.trivy.interval time (in seconds) after which a component should be
+    # re-scanned the latest
+    interval: 86400 # 24h
+    # @param extensions_cfg.trivy.on_unsupported behaviour in case the detected artefact
+    # kind/type/access is not supported
+    # options:
+    # - fail: raise an exception
+    # - ignore: skip processing
+    # - warning: skip processing and log a warning message (default)
+    on_unsupported: warning
+    # @param extensions_cfg.trivy.scan_target controls which artefact representation is scanned
+    # options:
+    # - binary: fetch and scan the artefact directly
+    # - sbom: use a pre-existing SBOM only (fails if no SBOM is available)
+    # - sbom_with_binary_fallback: use SBOM when available, fall back to binary scanning (default)
+    scan_target: sbom_with_binary_fallback
+
   # @param extensions_cfg.sbom_generator worker which generates SBoM documents for OCM artefacts and
   # stores them in ODG database. Downloadable via API or ODG-UI
   sbom_generator:
