@@ -16,7 +16,7 @@ dependencies = [
     "aiohttp==3.14.3",
     "aiohttp-swagger3==0.10.0",
     "awesomeversion==25.8.0",
-    "boto3==1.43.99",
+    "boto3==1.43.103",
     "brotli==1.2.0",
     "cachetools==7.2.0",
     "cyclonedx-python-lib==11.12.0",
@@ -28,12 +28,13 @@ dependencies = [
     "jsonpath-ng==1.8.0",
     "jsonschema==4.26.0",
     "kubernetes==36.0.3",
+    "mako==1.4.3",
     "prometheus_client==0.26.0",
     "psycopg[binary]==3.3.6",
-    "pyjwt==2.14.0",
+    "pyjwt==2.15.0",
     "requests==2.34.2",
     "sqlalchemy==2.0.54",
-    "starlette==1.6.0",
+    "starlette==1.7.0",
     "urllib3==2.8.0",
     "uvicorn==0.53.0",
     "watchdog==6.0.0",
@@ -56,7 +57,7 @@ dev = [
     "greenlet==3.5.6",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
-    "ruff==0.16.8",
+    "ruff==0.16.9",
     "bandit==1.9.4",
     "semver==3.1.0",
     "setuptools==84.0.0",
@@ -74,6 +75,7 @@ skips = [
   'B404', # we know how to call subprocesses
   'B413', # false-positive: we do not use pyCrypto, but pycryptodome
   'B603', # we know how to call subprocesses
+  'B702', # the input of Mako templates is trusted
 ]
 
 [tool.ruff]

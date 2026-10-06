@@ -19,6 +19,10 @@ spec:
           labels:
             app: {{ $podName }}
         spec:
+          {{- with .Values.global.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           containers:
           - name: {{ $podName }}
             image: {{ include "image" .Values.global.image }}
@@ -26,7 +30,7 @@ spec:
             command:
             - python3
             - -m
-            - sla_violation_profiler
+            - sla_violation_profiler_extension
             securityContext:
               allowPrivilegeEscalation: false
             env:

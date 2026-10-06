@@ -1,4 +1,4 @@
-{{- $podName := "ghas" }}
+{{- $podName := "sla-report" }}
 
 apiVersion: batch/v1
 kind: CronJob
@@ -6,14 +6,14 @@ metadata:
   name: {{ $podName }}
   namespace: {{ .Values.target_namespace | default .Release.Namespace }}
 spec:
-  schedule: {{ default "0 0 * * *" .Values.schedule | quote }} # Default: Every day at 12:00 AM
+  schedule: {{ default "0 2 * * *" .Values.schedule | quote }}
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: {{ default 1 .Values.successful_jobs_history_limit }}
   failedJobsHistoryLimit: {{ default 1 .Values.failed_jobs_history_limit }}
   jobTemplate:
     spec:
-      ttlSecondsAfterFinished: {{ default 43200 .Values.ttl_seconds_after_finished }} # 43200 -> 12h
       backoffLimit: {{ default 6 .Values.backoff_limit }}
+      ttlSecondsAfterFinished: {{ default 43200 .Values.ttl_seconds_after_finished }}
       template:
         metadata:
           labels:
@@ -30,7 +30,7 @@ spec:
             command:
             - python3
             - -m
-            - ghas
+            - sla_violation_profiler_extension.sla_report
             securityContext:
               allowPrivilegeEscalation: false
             env:
@@ -40,8 +40,6 @@ spec:
               value: /extensions_cfg/extensions_cfg
             - name: FINDINGS_CFG_PATH
               value: /findings_cfg/findings_cfg
-            - name: OCM_REPO_MAPPINGS_PATH
-              value: /ocm_repo_mappings/ocm_repo_mappings
             - name: K8S_TARGET_NAMESPACE
               value: {{ .Values.target_namespace | default .Release.Namespace }}
             volumeMounts:
@@ -49,20 +47,13 @@ spec:
               mountPath: /secrets/github
             - name: github-app
               mountPath: /secrets/github-app
-            - name: kubernetes
-              mountPath: /secrets/kubernetes
-            - name: oci-registry
-              mountPath: /secrets/oci-registry
             - name: extensions-cfg
               mountPath: /extensions_cfg
             - name: findings-cfg
               mountPath: /findings_cfg
-            - name: ocm-repo-mappings
-              mountPath: /ocm_repo_mappings
-              readOnly: true
-            {{- with (.Values.cronjob).resources }}
+            {{- with (.Values.report).resources }}
             resources:
-              {{- toYaml . | nindent 14 }}
+              {{- toYaml . | nindent 16 }}
             {{- end }}
           volumes:
             - name: github
@@ -73,29 +64,18 @@ spec:
               secret:
                 secretName: secret-factory-github-app
                 optional: true
-            - name: kubernetes
-              secret:
-                secretName: secret-factory-kubernetes
-                optional: true # might use incluster config
-            - name: oci-registry
-              secret:
-                secretName: secret-factory-oci-registry
-                optional: true # oci authentication is optional
             - name: extensions-cfg
               configMap:
                 name: extensions-cfg
             - name: findings-cfg
               configMap:
                 name: findings-cfg
-            - name: ocm-repo-mappings
-              configMap:
-                name: ocm-repo-mappings
           restartPolicy: Never
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-egress-from-ghas
+  name: allow-egress-from-sla-report
   namespace: {{ .Values.target_namespace | default .Release.Namespace }}
 spec:
   podSelector:
