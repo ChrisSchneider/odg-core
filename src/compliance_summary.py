@@ -289,36 +289,35 @@ async def component_datatype_summaries(
         db_session=db_session,
     )
 
-    if artefact_scan_infos:
-        findings = await deliverydb.util.findings_for_component(
-            component=component,
-            finding_type=finding_type,
-            datasource=datasource,
-            db_session=db_session,
-        )
-    else:
-        # if no scan exists, we don't have to query for findings
-        findings = []
-
-    if findings:
-        rescorings = await deliverydb.util.rescorings_for_component(
-            component=component,
-            finding_type=finding_type,
-            db_session=db_session,
-        )
-    else:
-        # if no findings exist, we don't have to query for rescorings
-        rescorings = []
+    rescorings = None  # lazily fetched on first artefact with findings
 
     summaries = []
-    for artefact in component.resources + component.sources:
+    for ocm_artefact in component.resources + component.sources:
         artefact = odg.model.component_artefact_id_from_ocm(
             component=component,
-            artefact=artefact,
+            artefact=ocm_artefact,
         )
 
         if not finding_cfg.matches(artefact):
             continue
+
+        if artefact_scan_infos:
+            findings = await deliverydb.util.findings_for_component(
+                component=component,
+                finding_type=finding_type,
+                datasource=datasource,
+                db_session=db_session,
+                artefacts=[ocm_artefact],
+            )
+        else:
+            findings = []
+
+        if findings and rescorings is None:
+            rescorings = await deliverydb.util.rescorings_for_component(
+                component=component,
+                finding_type=finding_type,
+                db_session=db_session,
+            )
 
         artefact_summary = await artefact_datatype_summary(
             artefact=artefact,
@@ -326,7 +325,7 @@ async def component_datatype_summaries(
             datasource=datasource,
             artefact_scan_infos=artefact_scan_infos,
             findings=findings,
-            rescorings=rescorings,
+            rescorings=rescorings or [],
         )
 
         summaries.append(

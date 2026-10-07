@@ -281,8 +281,20 @@ async def findings_for_component(
     finding_type: odg.model.Datatype,
     datasource: odg.model.Datasource,
     db_session: sqlasync.session.AsyncSession,
+    artefacts: collections.abc.Sequence[ocm.Resource | ocm.Source] | None = None,
     chunk_size: int = 50,
 ) -> list[odg.model.ArtefactMetadata]:
+    if artefacts is not None and len(artefacts) == 0:
+        return []
+
+    artefact_filter = [
+        query
+        async for query in ArtefactMetadataQueries.artefact_queries(
+            artefacts=artefacts,
+            component=None if artefacts is not None else component,
+        )
+    ]
+
     query = await db_session.stream(
         sa.select(dm.ArtefactMetaData).where(
             dm.ArtefactMetaData.component_name == component.name,
@@ -290,14 +302,7 @@ async def findings_for_component(
                 dm.ArtefactMetaData.component_version == component.version,
                 sa.and_(
                     dm.ArtefactMetaData.component_version.is_(None),
-                    sa.or_(
-                        *[  # check if component versions contains the referenced artefact version
-                            query
-                            async for query in ArtefactMetadataQueries.artefact_queries(
-                                component=component,
-                            )
-                        ],
-                    ),
+                    sa.or_(*artefact_filter),
                 ),
             ),
             dm.ArtefactMetaData.type == finding_type,

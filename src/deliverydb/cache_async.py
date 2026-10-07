@@ -130,6 +130,8 @@ def dbcached_function(
             '`ttl_seconds` must be greater or equal than `keep_at_least_seconds`.',
         )
 
+    _in_flight: dict[str, tuple[asyncio.Event, list]] = {}
+
     def decorator(func):
         async def wrapper(*args, **kwargs):
             function_name = f'{func.__module__}.{func.__qualname__}'
@@ -166,9 +168,27 @@ def dbcached_function(
                     encoding_format=encoding_format,
                 )
 
-            start = datetime.datetime.now()
-            result = await func(*args, **kwargs)
-            duration = datetime.datetime.now() - start
+            if not shortcut_cache and descriptor.id in _in_flight:
+                event, holder = _in_flight[descriptor.id]
+                await event.wait()
+                if isinstance(holder[0], BaseException):
+                    raise holder[0] from holder[0]
+                return holder[0]
+
+            event = asyncio.Event()
+            holder = []
+            _in_flight[descriptor.id] = (event, holder)
+            try:
+                start = datetime.datetime.now()
+                result = await func(*args, **kwargs)
+                duration = datetime.datetime.now() - start
+                holder.append(result)
+            except BaseException as exc:
+                holder.append(exc)
+                raise
+            finally:
+                event.set()
+                _in_flight.pop(descriptor.id, None)
 
             if result in skip_values:
                 # don't store result in cache if it is explicitly excluded
