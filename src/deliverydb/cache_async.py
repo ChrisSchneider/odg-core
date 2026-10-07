@@ -172,7 +172,7 @@ def dbcached_function(
                 event, holder = _in_flight[descriptor.id]
                 await event.wait()
                 if isinstance(holder[0], BaseException):
-                    raise holder[0] from holder[0]
+                    raise holder[0]
                 return holder[0]
 
             event = asyncio.Event()
