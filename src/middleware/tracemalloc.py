@@ -48,7 +48,7 @@ def _dump():
         for stat in snapshot.statistics('traceback')[:50]:
             f.write(f'{stat.size / 1024:.1f} KiB — {stat.count} object(s)\n')
             for frame in stat.traceback:
-                f.write(f'  File "{frame.filename}", line {frame.lineno}, in {frame.name}\n')
+                f.write(f'  File "{frame.filename}", line {frame.lineno}\n')
             f.write('\n')
 
     logger.info(f'tracemalloc snapshot written to {dump_path}')
