@@ -1209,11 +1209,11 @@ class ComplianceSummary(aiohttp.web.View):
                 await response.write(
                     util.dict_to_json_factory(component_summary).encode(),
                 )
+            await response.write(b']}')
+            await response.write_eof()
         except Exception:
             response.force_close()
             raise
-        await response.write(b']}')
-        await response.write_eof()
         return response
 
 
