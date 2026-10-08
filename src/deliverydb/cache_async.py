@@ -130,7 +130,7 @@ def dbcached_function(
             '`ttl_seconds` must be greater or equal than `keep_at_least_seconds`.',
         )
 
-    _in_flight: dict[str, tuple[asyncio.Event, list]] = {}
+    _in_flight: dict[str, tuple[asyncio.Event, list[BaseException | object]]] = {}
 
     def decorator(func):
         async def wrapper(*args, **kwargs):
@@ -169,29 +169,33 @@ def dbcached_function(
                 )
 
             if not shortcut_cache and descriptor.id in _in_flight:
-                event, holder = _in_flight[descriptor.id]
+                event, result_holder = _in_flight[descriptor.id]
                 await event.wait()
-                if isinstance(holder[0], BaseException):
-                    raise holder[0]
-                return holder[0]
+                if isinstance(result_holder[0], BaseException):
+                    raise result_holder[0]
+                return result_holder[0]
 
             event = asyncio.Event()
-            holder = []
-            _in_flight[descriptor.id] = (event, holder)
+            result_holder = []
+            if not shortcut_cache:
+                _in_flight[descriptor.id] = (event, result_holder)
             try:
                 start = datetime.datetime.now()
                 result = await func(*args, **kwargs)
                 duration = datetime.datetime.now() - start
-                holder.append(result)
+                result_holder.append(result)
             except BaseException as exc:
-                holder.append(exc)
+                result_holder.append(exc)
+                if not shortcut_cache:
+                    event.set()
+                    _in_flight.pop(descriptor.id, None)
                 raise
-            finally:
-                event.set()
-                _in_flight.pop(descriptor.id, None)
 
             if result in skip_values:
                 # don't store result in cache if it is explicitly excluded
+                if not shortcut_cache:
+                    event.set()
+                    _in_flight.pop(descriptor.id, None)
                 return result
 
             value = dcu.serialise_cache_value(
@@ -201,6 +205,9 @@ def dbcached_function(
 
             if max_size_octets > 0 and len(value) > max_size_octets:
                 # don't store result in cache if it exceeds max size for an individual cache entry
+                if not shortcut_cache:
+                    event.set()
+                    _in_flight.pop(descriptor.id, None)
                 return result
 
             now = datetime.datetime.now(datetime.timezone.utc)
@@ -218,6 +225,10 @@ def dbcached_function(
                 db_session=db_session,
                 cache_entry=cache_entry,
             )
+
+            if not shortcut_cache:
+                event.set()
+                _in_flight.pop(descriptor.id, None)
 
             return result
 

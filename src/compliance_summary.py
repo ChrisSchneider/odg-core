@@ -302,12 +302,12 @@ async def component_datatype_summaries(
             continue
 
         if artefact_scan_infos:
-            findings = await deliverydb.util.findings_for_component(
+            findings = await deliverydb.util.findings_for_artefact(
                 component=component,
+                artefact=ocm_artefact,
                 finding_type=finding_type,
                 datasource=datasource,
                 db_session=db_session,
-                artefacts=[ocm_artefact],
             )
         else:
             findings = []

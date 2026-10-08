@@ -317,6 +317,46 @@ async def findings_for_component(
     ]
 
 
+async def findings_for_artefact(
+    component: ocm.Component,
+    artefact: ocm.Resource | ocm.Source,
+    finding_type: odg.model.Datatype,
+    datasource: odg.model.Datasource,
+    db_session: sqlasync.session.AsyncSession,
+    chunk_size: int = 50,
+) -> list[odg.model.ArtefactMetadata]:
+    artefact_filter = [
+        query
+        async for query in ArtefactMetadataQueries.artefact_queries(
+            artefacts=[artefact],
+        )
+    ]
+
+    query = await db_session.stream(
+        sa.select(dm.ArtefactMetaData).where(
+            dm.ArtefactMetaData.component_name == component.name,
+            sa.or_(
+                sa.and_(
+                    dm.ArtefactMetaData.component_version == component.version,
+                    sa.or_(*artefact_filter),
+                ),
+                sa.and_(
+                    dm.ArtefactMetaData.component_version.is_(None),
+                    sa.or_(*artefact_filter),
+                ),
+            ),
+            dm.ArtefactMetaData.type == finding_type,
+            dm.ArtefactMetaData.datasource == datasource,
+        ),
+    )
+
+    return [
+        db_artefact_metadata_row_to_dso(row)
+        async for partition in query.partitions(size=chunk_size)
+        for row in partition
+    ]
+
+
 async def rescorings_for_component(
     component: ocm.Component | ocm.ComponentIdentity,
     finding_type: odg.model.Datatype,
