@@ -29,6 +29,7 @@ import middleware.db_session
 import middleware.errors
 import middleware.prometheus
 import middleware.route_feature_check as rfc
+import middleware.tracemalloc
 import osinfo
 import paths
 import rescore.artefacts
@@ -408,6 +409,14 @@ async def initialise_app():
     swagger = add_routes(
         swagger=swagger,
     )
+
+    # Enables simple memory debugging with tracemalloc
+    if middleware.tracemalloc.is_enabled:
+
+        async def _start_tracemalloc_watcher(_app):
+            asyncio.ensure_future(middleware.tracemalloc.tracemalloc_watcher())
+
+        app.on_startup.append(_start_tracemalloc_watcher)
 
     return app
 
