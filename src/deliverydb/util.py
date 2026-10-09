@@ -331,15 +331,10 @@ async def findings_for_artefact(
         sa.select(dm.ArtefactMetaData).where(
             dm.ArtefactMetaData.component_name == component.name,
             sa.or_(
-                sa.and_(
-                    dm.ArtefactMetaData.component_version == component.version,
-                    sa.or_(*artefact_filter),
-                ),
-                sa.and_(
-                    dm.ArtefactMetaData.component_version.is_(None),
-                    sa.or_(*artefact_filter),
-                ),
+                dm.ArtefactMetaData.component_version == component.version,
+                dm.ArtefactMetaData.component_version.is_(None),
             ),
+            sa.or_(*artefact_filter),
             dm.ArtefactMetaData.type == finding_type,
             dm.ArtefactMetaData.datasource == datasource,
         ),
