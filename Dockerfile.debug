@@ -32,3 +32,4 @@ RUN apk add --no-cache \
     lz4-libs
 
 COPY --from=memray-builder /opt/memray-build/lib /opt/venv/lib
+COPY --from=memray-builder /opt/memray-build/bin/py-spy /opt/venv/bin/py-spy
