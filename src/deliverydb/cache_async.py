@@ -196,44 +196,41 @@ def dbcached_function(
                     _in_flight.pop(descriptor.id, None)
                 raise
 
-            if result in skip_values:
-                # don't store result in cache if it is explicitly excluded
+            try:
+                if result in skip_values:
+                    # don't store result in cache if it is explicitly excluded
+                    return result
+
+                value = dcu.serialise_cache_value(
+                    value=result,
+                    encoding_format=encoding_format,
+                )
+
+                if max_size_octets > 0 and len(value) > max_size_octets:
+                    # don't store result in cache if it exceeds max size for individual cache entry
+                    return result
+
+                now = datetime.datetime.now(datetime.timezone.utc)
+                cache_entry = dm.DBCache(
+                    id=descriptor.id,
+                    descriptor=util.dict_serialisation(dataclasses.asdict(descriptor)),
+                    delete_after=now + datetime.timedelta(seconds=ttl_seconds)
+                    if ttl_seconds
+                    else None,
+                    keep_until=now + datetime.timedelta(seconds=keep_at_least_seconds),
+                    costs=int(duration.total_seconds() * 1000),
+                    size=len(value),
+                    value=value,
+                )
+
+                await add_or_update_cache_entry(
+                    db_session=db_session,
+                    cache_entry=cache_entry,
+                )
+            finally:
                 if not shortcut_cache:
                     event.set()
                     _in_flight.pop(descriptor.id, None)
-                return result
-
-            value = dcu.serialise_cache_value(
-                value=result,
-                encoding_format=encoding_format,
-            )
-
-            if max_size_octets > 0 and len(value) > max_size_octets:
-                # don't store result in cache if it exceeds max size for an individual cache entry
-                if not shortcut_cache:
-                    event.set()
-                    _in_flight.pop(descriptor.id, None)
-                return result
-
-            now = datetime.datetime.now(datetime.timezone.utc)
-            cache_entry = dm.DBCache(
-                id=descriptor.id,
-                descriptor=util.dict_serialisation(dataclasses.asdict(descriptor)),
-                delete_after=now + datetime.timedelta(seconds=ttl_seconds) if ttl_seconds else None,
-                keep_until=now + datetime.timedelta(seconds=keep_at_least_seconds),
-                costs=int(duration.total_seconds() * 1000),
-                size=len(value),
-                value=value,
-            )
-
-            await add_or_update_cache_entry(
-                db_session=db_session,
-                cache_entry=cache_entry,
-            )
-
-            if not shortcut_cache:
-                event.set()
-                _in_flight.pop(descriptor.id, None)
 
             return result
 

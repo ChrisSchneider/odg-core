@@ -292,7 +292,13 @@ async def component_datatype_summaries(
         if not finding_cfg.matches(artefact):
             continue
 
-        if artefact_scan_infos:
+        artefact_has_scan = any(
+            scan_info.artefact.artefact_kind is artefact.artefact_kind
+            and scan_info.artefact.artefact == artefact.artefact
+            for scan_info in artefact_scan_infos
+        )
+
+        if artefact_has_scan:
             findings = await deliverydb.util.findings_for_artefact(
                 component=component,
                 artefact=ocm_artefact,
