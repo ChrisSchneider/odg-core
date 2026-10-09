@@ -70,9 +70,9 @@ def db_session_middleware(
         )
         request[consts.REQUEST_DB_SESSION_LOW_PRIO] = await deliverydb.sqlalchemy_session_async(
             db_url=_db_url,
-            pool_size=2,
-            max_overflow=1,
-            pool_timeout=300,
+            pool_size=deliverydb.DB_POOL_LOW_PRIO_SIZE,
+            max_overflow=deliverydb.DB_POOL_LOW_PRIO_MAX_OVERFLOW,
+            pool_timeout=deliverydb.DB_POOL_LOW_PRIO_TIMEOUT,
         )
 
         try:

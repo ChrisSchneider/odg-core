@@ -13,6 +13,11 @@ def do_raise(self):
 # prevent usage of postgresql exclusive `JSONB`
 sap.JSONB.__init__ = do_raise
 
+# pool configuration for low-priority sessions (small pool, long timeout)
+DB_POOL_LOW_PRIO_SIZE = 2
+DB_POOL_LOW_PRIO_MAX_OVERFLOW = 1
+DB_POOL_LOW_PRIO_TIMEOUT = 300
+
 sessionmakers_async: dict[
     tuple[int, int, int],
     sqlasync.async_sessionmaker[sqlasync.session.AsyncSession],
