@@ -12,7 +12,6 @@ import sqlalchemy.exc
 import sqlalchemy.ext.asyncio as sqlasync
 
 import consts
-import deliverydb
 import deliverydb.model as dm
 import deliverydb_cache.model as dcm
 import deliverydb_cache.util as dcu
@@ -131,8 +130,6 @@ def dbcached_function(
             '`ttl_seconds` must be greater or equal than `keep_at_least_seconds`.',
         )
 
-    _in_flight: dict[str, tuple[asyncio.Event, list[BaseException | object]]] = {}
-
     def decorator(func):
         async def wrapper(*args, **kwargs):
             function_name = f'{func.__module__}.{func.__qualname__}'
@@ -169,68 +166,38 @@ def dbcached_function(
                     encoding_format=encoding_format,
                 )
 
-            if not shortcut_cache and descriptor.id in _in_flight:
-                event, result_holder = _in_flight[descriptor.id]
-                await event.wait()
-                outcome = result_holder[0]
-                if isinstance(outcome, asyncio.CancelledError):
-                    pass  # leader was cancelled; compute independently
-                elif isinstance(outcome, BaseException):
-                    raise outcome
-                else:
-                    return outcome
+            start = datetime.datetime.now()
+            result = await func(*args, **kwargs)
+            duration = datetime.datetime.now() - start
 
-            event = asyncio.Event()
-            result_holder = []
-            if not shortcut_cache:
-                _in_flight[descriptor.id] = (event, result_holder)
-            try:
-                start = datetime.datetime.now()
-                result = await func(*args, **kwargs)
-                duration = datetime.datetime.now() - start
-                result_holder.append(result)
-            except BaseException as exc:
-                result_holder.append(exc)
-                if not shortcut_cache:
-                    event.set()
-                    _in_flight.pop(descriptor.id, None)
-                raise
+            if result in skip_values:
+                # don't store result in cache if it is explicitly excluded
+                return result
 
-            try:
-                if result in skip_values:
-                    # don't store result in cache if it is explicitly excluded
-                    return result
+            value = dcu.serialise_cache_value(
+                value=result,
+                encoding_format=encoding_format,
+            )
 
-                value = dcu.serialise_cache_value(
-                    value=result,
-                    encoding_format=encoding_format,
-                )
+            if max_size_octets > 0 and len(value) > max_size_octets:
+                # don't store result in cache if it exceeds max size for an individual cache entry
+                return result
 
-                if max_size_octets > 0 and len(value) > max_size_octets:
-                    # don't store result in cache if it exceeds max size for individual cache entry
-                    return result
+            now = datetime.datetime.now(datetime.timezone.utc)
+            cache_entry = dm.DBCache(
+                id=descriptor.id,
+                descriptor=util.dict_serialisation(dataclasses.asdict(descriptor)),
+                delete_after=now + datetime.timedelta(seconds=ttl_seconds) if ttl_seconds else None,
+                keep_until=now + datetime.timedelta(seconds=keep_at_least_seconds),
+                costs=int(duration.total_seconds() * 1000),
+                size=len(value),
+                value=value,
+            )
 
-                now = datetime.datetime.now(datetime.timezone.utc)
-                cache_entry = dm.DBCache(
-                    id=descriptor.id,
-                    descriptor=util.dict_serialisation(dataclasses.asdict(descriptor)),
-                    delete_after=now + datetime.timedelta(seconds=ttl_seconds)
-                    if ttl_seconds
-                    else None,
-                    keep_until=now + datetime.timedelta(seconds=keep_at_least_seconds),
-                    costs=int(duration.total_seconds() * 1000),
-                    size=len(value),
-                    value=value,
-                )
-
-                await add_or_update_cache_entry(
-                    db_session=db_session,
-                    cache_entry=cache_entry,
-                )
-            finally:
-                if not shortcut_cache:
-                    event.set()
-                    _in_flight.pop(descriptor.id, None)
+            await add_or_update_cache_entry(
+                db_session=db_session,
+                cache_entry=cache_entry,
+            )
 
             return result
 
@@ -373,27 +340,19 @@ async def mark_for_deletion(
 
 
 async def mark_for_deletion_task(
-    db_url: str,
+    db_session: sqlasync.session.AsyncSession,
     id: str,
     delete_after: datetime.datetime | None = None,
     defer_db_commit: bool = False,
 ):
-    db_session = await deliverydb.sqlalchemy_session_async(
-        db_url=db_url,
-        pool_size=deliverydb.DB_POOL_LOW_PRIO_SIZE,
-        max_overflow=deliverydb.DB_POOL_LOW_PRIO_MAX_OVERFLOW,
-        pool_timeout=deliverydb.DB_POOL_LOW_PRIO_TIMEOUT,
+    await mark_for_deletion(
+        db_session=db_session,
+        id=id,
+        delete_after=delete_after,
+        defer_db_commit=defer_db_commit,
     )
 
-    try:
-        await mark_for_deletion(
-            db_session=db_session,
-            id=id,
-            delete_after=delete_after,
-            defer_db_commit=defer_db_commit,
-        )
-    finally:
-        await db_session.close()
+    await db_session.close()
 
 
 async def mark_function_cache_for_deletion(
@@ -466,7 +425,7 @@ class DeliveryDBCache(aiohttp.web.View):
           "204":
             description: Successful operation.
         """
-        db_url = self.request[consts.REQUEST_DB_URL]
+        db_session_low_prio = self.request[consts.REQUEST_DB_SESSION_LOW_PRIO]
         params = self.request.rel_url.query
 
         now = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -499,19 +458,13 @@ class DeliveryDBCache(aiohttp.web.View):
             )
             id = descriptor.id
 
-        task = asyncio.create_task(
+        asyncio.create_task(
             mark_for_deletion_task(
-                db_url=db_url,
+                db_session=db_session_low_prio,
                 id=id,
                 delete_after=delete_after,
             ),
         )
-
-        def _log_task_error(t: asyncio.Task) -> None:
-            if not t.cancelled() and (exc := t.exception()):
-                logger.warning(f'mark_for_deletion_task failed: {exc!r}')
-
-        task.add_done_callback(_log_task_error)
 
         return aiohttp.web.Response(
             status=http.HTTPStatus.NO_CONTENT,
