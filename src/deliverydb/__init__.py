@@ -14,12 +14,12 @@ def do_raise(self):
 sap.JSONB.__init__ = do_raise
 
 sessionmakers_async: dict[
-    tuple[str, int, int, int],
+    tuple[int, int, int],
     sqlasync.async_sessionmaker[sqlasync.session.AsyncSession],
 ] = {}
 
 sessionmakers: dict[
-    tuple[str, int, int, int],
+    tuple[int, int, int],
     sqlalchemy.orm.sessionmaker[sqlalchemy.orm.session.Session],
 ] = {}
 
@@ -31,7 +31,7 @@ async def _sqlalchemy_sessionmaker_async(
     pool_timeout: int = 30,
 ) -> sqlasync.async_sessionmaker[sqlasync.session.AsyncSession]:
     # don't use regular caching here to prevent issues with coroutines as return type
-    if sessionmaker := sessionmakers_async.get((db_url, pool_size, max_overflow, pool_timeout)):
+    if sessionmaker := sessionmakers_async.get((pool_size, max_overflow, pool_timeout)):
         return sessionmaker
 
     engine = sqlasync.create_async_engine(
@@ -52,7 +52,7 @@ async def _sqlalchemy_sessionmaker_async(
         await conn.run_sync(dm.Base.metadata.create_all)
 
     sessionmaker = sqlasync.async_sessionmaker(bind=engine)
-    sessionmakers_async[(db_url, pool_size, max_overflow, pool_timeout)] = sessionmaker
+    sessionmakers_async[(pool_size, max_overflow, pool_timeout)] = sessionmaker
 
     return sessionmaker
 
@@ -85,7 +85,7 @@ def _sqlalchemy_sessionmaker(
     max_overflow: int = 10,
     pool_timeout: int = 30,
 ) -> sqlalchemy.orm.sessionmaker[sqlalchemy.orm.session.Session]:
-    if sessionmaker := sessionmakers.get((db_url, pool_size, max_overflow, pool_timeout)):
+    if sessionmaker := sessionmakers.get((pool_size, max_overflow, pool_timeout)):
         return sessionmaker
 
     engine = sqlalchemy.create_engine(
@@ -104,7 +104,7 @@ def _sqlalchemy_sessionmaker(
     dm.Base.metadata.create_all(engine)
 
     sessionmaker = sqlalchemy.orm.sessionmaker(bind=engine)
-    sessionmakers[(db_url, pool_size, max_overflow, pool_timeout)] = sessionmaker
+    sessionmakers[(pool_size, max_overflow, pool_timeout)] = sessionmaker
 
     return sessionmaker
 
