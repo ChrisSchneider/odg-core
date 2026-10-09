@@ -96,6 +96,9 @@ def _sqlalchemy_sessionmaker(
         pool_size=pool_size,
         max_overflow=max_overflow,
         pool_timeout=pool_timeout,
+        connect_args={
+            'options': '-c idle_in_transaction_session_timeout=1800000',
+        },
     )
 
     dm.Base.metadata.create_all(engine)
