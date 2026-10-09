@@ -327,6 +327,11 @@ async def findings_for_artefact(
         )
     ]
 
+    if isinstance(artefact, ocm.Resource):
+        artefact_kind = odg.model.ArtefactKind.RESOURCE
+    else:
+        artefact_kind = odg.model.ArtefactKind.SOURCE
+
     query = await db_session.stream(
         sa.select(dm.ArtefactMetaData).where(
             dm.ArtefactMetaData.component_name == component.name,
@@ -335,6 +340,7 @@ async def findings_for_artefact(
                 dm.ArtefactMetaData.component_version.is_(None),
             ),
             sa.or_(*artefact_filter),
+            dm.ArtefactMetaData.artefact_kind == artefact_kind,
             dm.ArtefactMetaData.type == finding_type,
             dm.ArtefactMetaData.datasource == datasource,
         ),
