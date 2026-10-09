@@ -83,8 +83,10 @@ def db_session_middleware(
             raise
         finally:
             if db_session := request.get(consts.REQUEST_DB_SESSION):
+                await db_session.rollback()
                 await db_session.close()
             if db_session_low_prio := request.get(consts.REQUEST_DB_SESSION_LOW_PRIO):
+                await db_session_low_prio.rollback()
                 await db_session_low_prio.close()
 
         return response
