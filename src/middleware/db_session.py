@@ -83,18 +83,16 @@ def db_session_middleware(
         except Exception:
             raise
         finally:
-            try:
-                if db_session := request.get(consts.REQUEST_DB_SESSION):
-                    try:
-                        await db_session.rollback()
-                    finally:
-                        await db_session.close()
-            finally:
-                if db_session_low_prio := request.get(consts.REQUEST_DB_SESSION_LOW_PRIO):
-                    try:
-                        await db_session_low_prio.rollback()
-                    finally:
-                        await db_session_low_prio.close()
+            if db_session := request.get(consts.REQUEST_DB_SESSION):
+                try:
+                    await db_session.rollback()
+                finally:
+                    await db_session.close()
+            if db_session_low_prio := request.get(consts.REQUEST_DB_SESSION_LOW_PRIO):
+                try:
+                    await db_session_low_prio.rollback()
+                finally:
+                    await db_session_low_prio.close()
 
         return response
 
