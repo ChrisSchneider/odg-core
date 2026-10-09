@@ -138,6 +138,11 @@ test:
 		exit 1; \
 	fi
 
+# Performance testing
+test-perf:
+	@echo "Running performance tests..."
+	cd test/perf && uv run pytest -v -s
+
 # Build client packages (bdba and odg)
 build-clients:
 	@echo "Building client packages..."
