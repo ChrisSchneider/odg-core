@@ -171,9 +171,13 @@ def dbcached_function(
             if not shortcut_cache and descriptor.id in _in_flight:
                 event, result_holder = _in_flight[descriptor.id]
                 await event.wait()
-                if isinstance(result_holder[0], BaseException):
-                    raise result_holder[0]
-                return result_holder[0]
+                outcome = result_holder[0]
+                if isinstance(outcome, asyncio.CancelledError):
+                    pass  # leader was cancelled; compute independently
+                elif isinstance(outcome, BaseException):
+                    raise outcome
+                else:
+                    return outcome
 
             event = asyncio.Event()
             result_holder = []
