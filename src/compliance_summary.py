@@ -190,15 +190,6 @@ async def artefact_datatype_summary(
     findings: collections.abc.Sequence[odg.model.ArtefactMetadata],
     rescorings: collections.abc.Sequence[odg.model.ArtefactMetadata],
 ) -> ComplianceSummaryEntry:
-    findings_for_artefact = [
-        finding
-        for finding in findings
-        if (
-            finding.artefact.artefact_kind is artefact.artefact_kind
-            and finding.artefact.artefact == artefact.artefact
-        )
-    ]
-
     normalised_artefact_extra_identity = odg.model.normalise_artefact_extra_id(
         artefact_extra_id=artefact.artefact.artefact_extra_id,
         omit_version=True,
@@ -248,7 +239,7 @@ async def artefact_datatype_summary(
         finding_cfg=finding_cfg,
         datasource=datasource,
         scan_exists=scan_exists,
-        findings=findings_for_artefact,
+        findings=findings,
         rescorings=rescorings_for_artefact,
     )
 
