@@ -6,7 +6,6 @@ globally available.
 
 APP_BASE_URL = 'base_url'
 APP_COMPONENT_DESCRIPTOR_LOOKUP = 'component_descriptor_lookup'
-APP_DB_URL = 'db_url'
 APP_EOL_CLIENT = 'eol_client'
 APP_GITHUB_API_LOOKUP = 'github_api_lookup'
 APP_GITHUB_REPO_LOOKUP = 'github_repo_lookup'
@@ -18,6 +17,8 @@ APP_OCI_CLIENT = 'oci_client'
 REQUEST_DB_SESSION = 'db_session'
 # `db_session_low_prio` has a small connection pool with a long timeout for low prio tasks
 REQUEST_DB_SESSION_LOW_PRIO = 'db_session_low_prio'
+# `db_url` key to create sessions outside the request-scoped ones
+REQUEST_DB_URL = 'db_url'
 REQUEST_USER_ID = 'user_id'
 REQUEST_USER_ROLES = 'user_roles'
 

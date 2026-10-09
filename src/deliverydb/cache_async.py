@@ -434,7 +434,7 @@ class DeliveryDBCache(aiohttp.web.View):
           "204":
             description: Successful operation.
         """
-        db_url = self.request.app[consts.APP_DB_URL]
+        db_url = self.request[consts.REQUEST_DB_URL]
         params = self.request.rel_url.query
 
         now = datetime.datetime.now(tz=datetime.timezone.utc)
@@ -474,13 +474,12 @@ class DeliveryDBCache(aiohttp.web.View):
                 delete_after=delete_after,
             ),
         )
-        task.add_done_callback(
-            lambda t: (
-                logger.warning(f'mark_for_deletion_task failed: {t.exception()!r}')
-                if not t.cancelled() and t.exception()
-                else None
-            ),
-        )
+
+        def _log_task_error(t: asyncio.Task) -> None:
+            if not t.cancelled() and (exc := t.exception()):
+                logger.warning(f'mark_for_deletion_task failed: {exc!r}')
+
+        task.add_done_callback(_log_task_error)
 
         return aiohttp.web.Response(
             status=http.HTTPStatus.NO_CONTENT,
