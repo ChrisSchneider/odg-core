@@ -37,6 +37,13 @@ spec:
                     keep_clusterwide_objects:
                       type: boolean
                       default: false
+                    external_postgres_secret:
+                      type: string
+                      description: >
+                        Name of a pre-existing Kubernetes Secret holding the delivery-db credentials
+                        for an external (managed) PostgreSQL instance. When set, the in-cluster
+                        delivery-db extension is not deployed and the delivery-service chart uses
+                        this secret instead.
                   required:
                     - base_url
                     - target_namespace

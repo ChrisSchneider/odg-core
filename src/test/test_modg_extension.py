@@ -134,3 +134,44 @@ def test_extensions(extension_definitions):
     ]
     assert patched_values[0] == 'my-target-namespace'
     assert patched_values[1] is True
+
+
+def test_external_postgres_secret_template(extension_definitions):
+    ds = dacite.from_dict(
+        data=extension_definitions[0],
+        data_class=odgm.ExtensionDefinition,
+        config=dacite.Config(cast=[enum.Enum]),
+    )
+
+    # template for deliveryDb.existingSecret uses default='' when key is absent
+    existing_secret_template = next(
+        vt
+        for vt in ds.installation.value_templates
+        if vt.helm_attribute == 'deliveryDb.existingSecret'
+    )
+
+    context_without = {
+        'base_url': 'my-domain.com',
+        'target_namespace': 'my-target-namespace',
+    }
+    value = odgu.template_and_resolve_jsonpath(
+        value=existing_secret_template.value,
+        jsonpaths={},
+        substitution_context=context_without,
+        value_type=existing_secret_template.value_type,
+        default_value=existing_secret_template.default,
+    )
+    assert value == ''
+
+    context_with = {
+        **context_without,
+        'external_postgres_secret': 'my-pg-secret',
+    }
+    value = odgu.template_and_resolve_jsonpath(
+        value=existing_secret_template.value,
+        jsonpaths={},
+        substitution_context=context_with,
+        value_type=existing_secret_template.value_type,
+        default_value=existing_secret_template.default,
+    )
+    assert value == 'my-pg-secret'

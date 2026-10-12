@@ -732,6 +732,15 @@ def reconcile(
                     # make sure there are no duplicates
                     requested_extension_definitions = set(requested_extension_definitions)
 
+                    if odg.context.get('external_postgres_secret'):
+                        # user-managed postgres: skip the in-cluster delivery-db; the
+                        # delivery-service chart picks up the secret via deliveryDb.existingSecret
+                        requested_extension_definitions = {
+                            ext
+                            for ext in requested_extension_definitions
+                            if ext.name != 'delivery-db'
+                        }
+
                     status_for_extension, has_error = create_or_update_odg(
                         odg=odg,
                         extension_definitions=requested_extension_definitions,

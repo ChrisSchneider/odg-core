@@ -39,6 +39,11 @@ installation:
     helm_chart_name: delivery-service
     value: ${deliveryServiceMaxReplicas}
     value_type: python-string-template
+  - default: ''
+    helm_attribute: deliveryDb.existingSecret
+    helm_chart_name: delivery-service
+    value: ${external_postgres_secret}
+    value_type: python-string-template
 name: delivery-service
 outputs:
 - name: delivery-service-url
