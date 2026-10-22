@@ -8,7 +8,8 @@ import traceback
 
 import aiohttp.web
 import dacite
-import sqlalchemy.exc
+import sqlalchemy
+import sqlalchemy.dialects.postgresql
 import sqlalchemy.ext.asyncio as sqlasync
 
 import consts
@@ -23,58 +24,66 @@ import util
 logger = logging.getLogger(__name__)
 
 
-async def update_cache_entry(
-    db_session: sqlasync.session.AsyncSession,
-    cache_entry: dm.DBCache,
-) -> bool:
-    if not (existing_cache_entry := await db_session.get(dm.DBCache, cache_entry.id)):
-        # cache entry does not exist yet, hence we cannot _update_ it
-        return False
-
+async def _update_read_stats(db_url: str, id: str, now: datetime.datetime) -> None:
+    db_session = await deliverydb.sqlalchemy_session_async(
+        db_url=db_url,
+        pool_size=deliverydb.DB_POOL_LOW_PRIO_SIZE,
+        max_overflow=deliverydb.DB_POOL_LOW_PRIO_MAX_OVERFLOW,
+        pool_timeout=deliverydb.DB_POOL_LOW_PRIO_TIMEOUT,
+    )
     try:
-        existing_cache_entry.revision = existing_cache_entry.revision + 1
-        existing_cache_entry.last_update = datetime.datetime.now(datetime.timezone.utc)
-        existing_cache_entry.delete_after = cache_entry.delete_after
-        existing_cache_entry.keep_until = cache_entry.keep_until
-        existing_cache_entry.costs = cache_entry.costs
-        existing_cache_entry.size = cache_entry.size
-        existing_cache_entry.value = cache_entry.value
-
+        stmt = (
+            sqlalchemy.update(dm.DBCache)
+            .where(dm.DBCache.id == id)
+            .values(
+                last_read=now,
+                read_count=dm.DBCache.read_count + 1,
+            )
+        )
+        await db_session.execute(stmt)
         await db_session.commit()
-        return True
     except Exception:
-        stacktrace = traceback.format_exc()
-        logger.error(stacktrace)
-
+        logger.warning(traceback.format_exc())
         await db_session.rollback()
-
-    return False
+    finally:
+        await db_session.close()
 
 
 async def add_or_update_cache_entry(
     db_session: sqlasync.session.AsyncSession,
     cache_entry: dm.DBCache,
 ) -> bool:
+    now = datetime.datetime.now(datetime.timezone.utc)
+    stmt = (
+        sqlalchemy.dialects.postgresql.insert(dm.DBCache)
+        .values(
+            id=cache_entry.id,
+            descriptor=cache_entry.descriptor,
+            delete_after=cache_entry.delete_after,
+            keep_until=cache_entry.keep_until,
+            costs=cache_entry.costs,
+            size=cache_entry.size,
+            value=cache_entry.value,
+            revision=0,
+            read_count=0,
+        )
+        .on_conflict_do_update(
+            index_elements=[dm.DBCache.id],
+            set_={
+                'revision': dm.DBCache.revision + 1,
+                'last_update': now,
+                'delete_after': cache_entry.delete_after,
+                'keep_until': cache_entry.keep_until,
+                'costs': cache_entry.costs,
+                'size': cache_entry.size,
+                'value': cache_entry.value,
+            },
+        )
+    )
     try:
-        db_session.add(cache_entry)
+        await db_session.execute(stmt)
         await db_session.commit()
         return True
-
-    except sqlalchemy.exc.IntegrityError:
-        await db_session.rollback()
-
-        # try to update cache entry instead because it may have already existed and hence raised a
-        # duplicated key error (this is the expected case if a cache entry got stale or it is
-        # calculated multiple times concurrently)
-        if await update_cache_entry(
-            db_session=db_session,
-            cache_entry=cache_entry,
-        ):
-            return True
-
-        stacktrace = traceback.format_exc()
-        logger.error(stacktrace)
-
     except Exception:
         stacktrace = traceback.format_exc()
         logger.error(stacktrace)
@@ -87,6 +96,7 @@ async def add_or_update_cache_entry(
 async def find_cached_value(
     db_session: sqlasync.session.AsyncSession,
     id: str,
+    db_url: str | None = None,
 ) -> bytes | None:
     if not (cache_entry := await db_session.get(dm.DBCache, id)):
         return None
@@ -103,15 +113,9 @@ async def find_cached_value(
 
     value = cache_entry.value
 
-    try:
-        cache_entry.last_read = now
-        cache_entry.read_count = cache_entry.read_count + 1
-        await db_session.commit()
-    except Exception:
-        stacktrace = traceback.format_exc()
-        logger.error(stacktrace)
-
-        await db_session.rollback()
+    if db_url:
+        # Fire-and-forget: server-side atomic increment avoids read-modify-write lock contention.
+        asyncio.create_task(_update_read_stats(db_url=db_url, id=id, now=now))
 
     return value
 
@@ -148,6 +152,7 @@ def dbcached_function(
                 return await func(*args, **kwargs)
 
             shortcut_cache = cachable_kwargs.pop('shortcut_cache', False)
+            db_url: str | None = cachable_kwargs.pop('db_url', None)
 
             descriptor = dcm.CachedPythonFunction(
                 encoding_format=encoding_format,
@@ -160,6 +165,7 @@ def dbcached_function(
                 value := await find_cached_value(
                     db_session=db_session,
                     id=descriptor.id,
+                    db_url=db_url,
                 )
             ):
                 loop = asyncio.get_running_loop()
@@ -271,6 +277,7 @@ def dbcached_route(
                 value := await find_cached_value(
                     db_session=db_session,
                     id=descriptor.id,
+                    db_url=request.get(consts.REQUEST_DB_URL),
                 )
             ):
                 loop = asyncio.get_running_loop()
