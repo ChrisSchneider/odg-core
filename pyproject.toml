@@ -21,6 +21,7 @@ dependencies = [
     "cachetools==7.2.1",
     "cyclonedx-python-lib==11.12.0",
     "dacite==1.9.2",
+    "mashumaro==3.23",
     "dataclasses-json==0.6.7",
     "gardener-cicd-libs==1.2847.0",
     "github3.py==4.0.1",
