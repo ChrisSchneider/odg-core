@@ -67,7 +67,7 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "strict"
-python_files = ["test_*.py", "bench_*.py"]
+python_files = ["test_*.py", "bench_*.py", "*_test.py"]
 
 [tool.bandit]
 exclude_dirs = ['test', '.venv']
