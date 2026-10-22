@@ -565,7 +565,6 @@ def db_cache_component_descriptor_lookup_async(
                 if value := await deliverydb.cache_async.find_cached_value(
                     db_session=db_session,
                     id=descriptor.id,
-                    db_url=db_url,
                 ):
                     return ocm.ComponentDescriptor.from_dict(
                         component_descriptor_dict=dcu.deserialise_cache_value(

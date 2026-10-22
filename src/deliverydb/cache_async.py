@@ -24,31 +24,6 @@ import util
 logger = logging.getLogger(__name__)
 
 
-async def _update_read_stats(db_url: str, id: str, now: datetime.datetime) -> None:
-    db_session = await deliverydb.sqlalchemy_session_async(
-        db_url=db_url,
-        pool_size=deliverydb.DB_POOL_LOW_PRIO_SIZE,
-        max_overflow=deliverydb.DB_POOL_LOW_PRIO_MAX_OVERFLOW,
-        pool_timeout=deliverydb.DB_POOL_LOW_PRIO_TIMEOUT,
-    )
-    try:
-        stmt = (
-            sqlalchemy.update(dm.DBCache)
-            .where(dm.DBCache.id == id)
-            .values(
-                last_read=now,
-                read_count=dm.DBCache.read_count + 1,
-            )
-        )
-        await db_session.execute(stmt)
-        await db_session.commit()
-    except Exception:
-        logger.warning(traceback.format_exc())
-        await db_session.rollback()
-    finally:
-        await db_session.close()
-
-
 async def add_or_update_cache_entry(
     db_session: sqlasync.session.AsyncSession,
     cache_entry: dm.DBCache,
@@ -96,7 +71,6 @@ async def add_or_update_cache_entry(
 async def find_cached_value(
     db_session: sqlasync.session.AsyncSession,
     id: str,
-    db_url: str | None = None,
 ) -> bytes | None:
     if not (cache_entry := await db_session.get(dm.DBCache, id)):
         return None
@@ -113,9 +87,22 @@ async def find_cached_value(
 
     value = cache_entry.value
 
-    if db_url:
-        # Fire-and-forget: server-side atomic increment avoids read-modify-write lock contention.
-        asyncio.create_task(_update_read_stats(db_url=db_url, id=id, now=now))
+    try:
+        stmt = (
+            sqlalchemy.update(dm.DBCache)
+            .where(dm.DBCache.id == id)
+            .values(
+                last_read=now,
+                read_count=dm.DBCache.read_count + 1,
+            )
+        )
+        await db_session.execute(stmt)
+        await db_session.commit()
+    except Exception:
+        stacktrace = traceback.format_exc()
+        logger.error(stacktrace)
+
+        await db_session.rollback()
 
     return value
 
