@@ -123,6 +123,15 @@ _token_payload_validator: jsonschema.protocols.Validator = jsonschema.Draft20201
 )
 
 
+@functools.lru_cache(maxsize=32)
+def _prepared_signing_key(
+    private_key: str,
+    algorithm: str,
+) -> jwt.algorithms.Algorithm:
+    alg_obj = jwt.get_algorithm_by_name(algorithm)
+    return alg_obj.prepare_key(private_key)
+
+
 @noauth
 class OAuthCfgs(aiohttp.web.View):
     async def get(self):
@@ -611,7 +620,7 @@ async def set_session_and_refresh_token(
         name=odg_client.jwt.JWT_KEY,
         value=jwt.encode(
             session_token,
-            signing_cfg.private_key,
+            _prepared_signing_key(signing_cfg.private_key, signing_cfg.algorithm),
             algorithm=signing_cfg.algorithm,
         ),
         httponly=True,
