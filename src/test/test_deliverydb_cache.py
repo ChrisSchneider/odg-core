@@ -112,13 +112,14 @@ class TestSyncFindCachedValue:
     def test_returns_value_and_updates_read_stats(self):
         session = unittest.mock.MagicMock()
         entry = _make_cache_entry(value=b'hello')
-        entry.read_count = 3
         session.get.return_value = entry
 
         result = cache_sync.find_cached_value(db_session=session, id=entry.id)
 
         assert result == b'hello'
-        assert entry.read_count == 4
+        session.execute.assert_called_once()
+        stmt = session.execute.call_args[0][0]
+        assert isinstance(stmt, sqlalchemy.sql.dml.Update)
         session.commit.assert_called_once()
 
     def test_rolls_back_on_commit_error(self):
