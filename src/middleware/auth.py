@@ -12,6 +12,7 @@ import aiohttp
 import aiohttp.typedefs
 import aiohttp.web
 import Crypto.PublicKey.RSA
+import cryptography.hazmat.primitives.asymmetric.rsa
 import jsonschema
 import jsonschema.exceptions
 import jwt
@@ -127,7 +128,7 @@ _token_payload_validator: jsonschema.protocols.Validator = jsonschema.Draft20201
 def _prepared_signing_key(
     private_key: str,
     algorithm: str,
-) -> jwt.algorithms.Algorithm:
+) -> cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey | bytes:
     alg_obj = jwt.get_algorithm_by_name(algorithm)
     return alg_obj.prepare_key(private_key)
 
