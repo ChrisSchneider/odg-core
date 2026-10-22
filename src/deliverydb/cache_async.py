@@ -77,8 +77,6 @@ async def find_cached_value(
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    # explicitly cast timezone to UTC to also support sqlite usage since it drops the timezone
-    # information and always casts to UTC internally
     if cache_entry.delete_after and now > cache_entry.delete_after.astimezone(datetime.timezone.utc):
         # cache entry is already stale -> don't used it
         # TODO: return stale entry already to client and calculate new value in the background and
@@ -139,7 +137,7 @@ def dbcached_function(
                 return await func(*args, **kwargs)
 
             shortcut_cache = cachable_kwargs.pop('shortcut_cache', False)
-            db_url: str | None = cachable_kwargs.pop('db_url', None)
+            cachable_kwargs.pop('db_url', None)
 
             descriptor = dcm.CachedPythonFunction(
                 encoding_format=encoding_format,
@@ -152,7 +150,6 @@ def dbcached_function(
                 value := await find_cached_value(
                     db_session=db_session,
                     id=descriptor.id,
-                    db_url=db_url,
                 )
             ):
                 loop = asyncio.get_running_loop()
@@ -264,7 +261,6 @@ def dbcached_route(
                 value := await find_cached_value(
                     db_session=db_session,
                     id=descriptor.id,
-                    db_url=request.get(consts.REQUEST_DB_URL),
                 )
             ):
                 loop = asyncio.get_running_loop()

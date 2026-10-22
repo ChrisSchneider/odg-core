@@ -4,6 +4,7 @@ import datetime
 import logging
 import traceback
 
+import sqlalchemy
 import sqlalchemy.dialects.postgresql
 import sqlalchemy.orm.session
 
@@ -69,8 +70,6 @@ def find_cached_value(
 
     now = datetime.datetime.now(datetime.timezone.utc)
 
-    # explicitly cast timezone to UTC to also support sqlite usage since it drops the timezone
-    # information and always casts to UTC internally
     if cache_entry.delete_after and now > cache_entry.delete_after.astimezone(datetime.timezone.utc):
         # cache entry is already stale -> don't used it
         # TODO: return stale entry already to client and calculate new value in the background and
@@ -80,8 +79,15 @@ def find_cached_value(
     value = cache_entry.value
 
     try:
-        cache_entry.last_read = now
-        cache_entry.read_count = cache_entry.read_count + 1
+        stmt = (
+            sqlalchemy.update(dm.DBCache)
+            .where(dm.DBCache.id == id)
+            .values(
+                last_read=now,
+                read_count=dm.DBCache.read_count + 1,
+            )
+        )
+        db_session.execute(stmt)
         db_session.commit()
     except Exception:
         stacktrace = traceback.format_exc()
