@@ -54,7 +54,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = {TEST_REVISION_ID!r}
-down_revision: str | None = {'cc90ad81441c'!r}
+down_revision: str | None = {'33862894185c'!r}
 
 def schema_upgrade() -> None:
     op.add_column('cache', sa.Column({TEST_MARKER_COLUMN!r}, sa.Integer, nullable=True))
