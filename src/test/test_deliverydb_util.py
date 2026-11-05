@@ -28,12 +28,35 @@ _LEGACY_DATA = {
     'cvss_v3_score': 7.5,
 }
 
+_RESCORING_META = {
+    'type': 'rescorings',
+    'datasource': 'bdba',
+    'creation_date': '2025-01-01T00:00:00+00:00',
+}
+
+_RESCORING_DATA = {
+    'comment': 'Not affected',
+    'finding': {'cve': 'CVE-2025-0001', 'package_name': 'openssl'},
+    'matching_rules': ['bdba-triage'],
+    'referenced_type': 'finding/vulnerability',
+    'severity': 'NONE',
+    'user': {
+        'email': 'user@example.com',
+        'firstname': 'First',
+        'lastname': 'Last',
+        'type': 'bdba-user',
+        'username': 'user@example.com',
+    },
+}
+
 
 def _make_artefact_metadata_row(
-    data: dict | None = None, meta: dict | None = None,
+    data: dict | None = None,
+    meta: dict | None = None,
+    type: str = 'finding/vulnerability',
 ) -> dm.ArtefactMetaData:
     return dm.ArtefactMetaData(
-        type='finding/vulnerability',
+        type=type,
         component_name='example.org/component',
         component_version='1.0.0',
         artefact_kind='resource',
@@ -80,3 +103,45 @@ class TestDbArtefactMetadataToDict:
         result = du.db_artefact_metadata_to_dict(row)
 
         assert result['meta'] == self._roundtrip(row)['meta']
+
+    def test_vulnerability_optional_fields_defaulted(self):
+        # Old BDBA rows lack purl/rating_source/recommendation; normalize must add them as None.
+        row = _make_artefact_metadata_row(data=_BASE_DATA)
+
+        result = du.db_artefact_metadata_to_dict(row)
+
+        assert result['data']['purl'] is None
+        assert result['data']['rating_source'] is None
+        assert result['data']['recommendation'] is None
+
+    def test_vulnerability_nvd_url_appended(self):
+        # __post_init__ on VulnerabilityFinding appends the NVD URL; normalize must replicate it.
+        row = _make_artefact_metadata_row(data={**_BASE_DATA, 'cve': 'CVE-2025-0001'})
+
+        result = du.db_artefact_metadata_to_dict(row)
+
+        assert 'https://nvd.nist.gov/vuln/detail/CVE-2025-0001' in result['data']['urls']
+        assert result['data']['urls'] == self._roundtrip(row)['data']['urls']
+
+    def test_rescoring_optional_fields_defaulted(self):
+        # Old rescoring rows lack allowed_processing_time/due_date; normalize must add them as None.
+        row = _make_artefact_metadata_row(
+            type='rescorings',
+            data=_RESCORING_DATA,
+            meta=_RESCORING_META,
+        )
+
+        result = du.db_artefact_metadata_to_dict(row)
+
+        assert result['data']['allowed_processing_time'] is None
+        assert result['data']['due_date'] is None
+
+    def test_meta_z_timestamp_normalised(self):
+        # Legacy rows may store timestamps with "Z" suffix; normalise to "+00:00" with microseconds
+        # to match what datetime.isoformat() produces after a dacite round-trip.
+        meta_with_z = {**_BASE_META, 'creation_date': '2024-04-29T20:50:48.778Z'}
+        row = _make_artefact_metadata_row(meta=meta_with_z)
+
+        result = du.db_artefact_metadata_to_dict(row)
+
+        assert result['meta']['creation_date'] == '2024-04-29T20:50:48.778000+00:00'

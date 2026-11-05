@@ -17,14 +17,6 @@ import odg.model
 import util
 
 
-def _backfill_cvss_score_in_data(data: dict | None) -> dict | None:
-    if not isinstance(data, dict):
-        return data
-    if data.get('cvss_score') is not None or data.get('cvss_v3_score') is None:
-        return data
-    return {**data, 'cvss_score': odg.model.backfill_cvss_score(None, data['cvss_v3_score'])}
-
-
 def to_db_artefact_metadata(
     artefact_metadata: odg.model.ArtefactMetadata,
 ) -> dm.ArtefactMetaData:
@@ -74,6 +66,31 @@ def db_artefact_metadata_to_dict(
     artefact_metadata: dm.ArtefactMetaData,
 ) -> dict:
     meta = artefact_metadata.meta or {}
+    data = artefact_metadata.data
+    row_type = artefact_metadata.type
+
+    if isinstance(data, dict):
+        if row_type == odg.model.Datatype.VULNERABILITY_FINDING:
+            cve = data.get('cve', '')
+            urls = list(data.get('urls') or [])
+            data = {
+                **data,
+                'cvss_score': odg.model.backfill_cvss_score(
+                    data.get('cvss_score'),
+                    data.get('cvss_v3_score'),
+                ),
+                'purl': data.get('purl'),
+                'rating_source': data.get('rating_source'),
+                'recommendation': data.get('recommendation'),
+                'urls': odg.model.append_nvd_url(cve, urls),
+            }
+        elif row_type == odg.model.Datatype.RESCORING:
+            data = {
+                **data,
+                'allowed_processing_time': data.get('allowed_processing_time'),
+                'due_date': data.get('due_date'),
+            }
+
     return {
         'artefact': {
             'component_name': artefact_metadata.component_name,
@@ -90,10 +107,11 @@ def db_artefact_metadata_to_dict(
         'meta': {
             **meta,
             'assignee_mode': meta.get('assignee_mode'),
-            'last_update': meta.get('last_update'),
+            'creation_date': odg.model.normalise_timestamp(meta.get('creation_date')),
+            'last_update': odg.model.normalise_timestamp(meta.get('last_update')),
             'responsibles': meta.get('responsibles'),
         },
-        'data': _backfill_cvss_score_in_data(artefact_metadata.data),
+        'data': data,
         'discovery_date': (
             artefact_metadata.discovery_date.isoformat()
             if artefact_metadata.discovery_date

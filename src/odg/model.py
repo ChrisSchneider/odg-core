@@ -28,6 +28,23 @@ def _as_key(
     return separator.join(absent_indicator if arg is None else arg for arg in args)
 
 
+def backfill_cvss_score(cvss_score: float | None, cvss_v3_score: float | None) -> float | None:
+    return cvss_v3_score if cvss_score is None else cvss_score
+
+
+def append_nvd_url(cve: str, urls: list[str]) -> list[str]:
+    nvd_url = f'https://nvd.nist.gov/vuln/detail/{cve}'
+    if cve.startswith('CVE-') and nvd_url not in urls:
+        urls.append(nvd_url)
+    return urls
+
+
+def normalise_timestamp(value: str | None) -> str | None:
+    if not isinstance(value, str):
+        return value
+    return datetime.datetime.fromisoformat(value).isoformat()
+
+
 class Datatype(enum.StrEnum):
     # finding independent datatypes/"meta"-types
     ARTEFACT_SCAN_INFO = 'meta/artefact_scan_info'
@@ -527,17 +544,11 @@ class VulnerabilityFinding(Finding):
     def __post_init__(self):
         if self.cvss_score is None:
             raise ValueError(f'cvss_score is required (cve={self.cve})')
-        nvd_url = f'https://nvd.nist.gov/vuln/detail/{self.cve}'
-        if self.cve.startswith('CVE-') and nvd_url not in self.urls:
-            self.urls.append(nvd_url)
+        append_nvd_url(self.cve, self.urls)
 
     @property
     def key(self) -> str:
         return _as_key(self.package_name, self.package_version, self.cve)
-
-
-def backfill_cvss_score(cvss_score: float | None, cvss_v3_score: float | None) -> float | None:
-    return cvss_v3_score if cvss_score is None else cvss_score
 
 
 @dataclasses.dataclass
