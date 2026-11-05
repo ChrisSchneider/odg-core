@@ -35,14 +35,16 @@ def backfill_cvss_score(cvss_score: float | None, cvss_v3_score: float | None) -
 def append_nvd_url(cve: str, urls: list[str]) -> list[str]:
     nvd_url = f'https://nvd.nist.gov/vuln/detail/{cve}'
     if cve.startswith('CVE-') and nvd_url not in urls:
-        urls.append(nvd_url)
+        return [*urls, nvd_url]
     return urls
 
 
-def normalise_timestamp(value: str | None) -> str | None:
-    if not isinstance(value, str):
-        return value
-    return datetime.datetime.fromisoformat(value).isoformat()
+def normalise_timestamp(value: str | datetime.datetime | None) -> str | None:
+    if isinstance(value, datetime.datetime):
+        return value.isoformat()
+    if isinstance(value, str):
+        return datetime.datetime.fromisoformat(value).isoformat()
+    return value
 
 
 class Datatype(enum.StrEnum):
@@ -544,7 +546,7 @@ class VulnerabilityFinding(Finding):
     def __post_init__(self):
         if self.cvss_score is None:
             raise ValueError(f'cvss_score is required (cve={self.cve})')
-        append_nvd_url(self.cve, self.urls)
+        self.urls = append_nvd_url(self.cve, self.urls)
 
     @property
     def key(self) -> str:

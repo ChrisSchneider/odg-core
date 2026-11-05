@@ -71,8 +71,7 @@ def db_artefact_metadata_to_dict(
 
     if isinstance(data, dict):
         if row_type == odg.model.Datatype.VULNERABILITY_FINDING:
-            cve = data.get('cve', '')
-            urls = list(data.get('urls') or [])
+            cve = data.get('cve') or ''
             data = {
                 **data,
                 'cvss_score': odg.model.backfill_cvss_score(
@@ -82,7 +81,7 @@ def db_artefact_metadata_to_dict(
                 'purl': data.get('purl'),
                 'rating_source': data.get('rating_source'),
                 'recommendation': data.get('recommendation'),
-                'urls': odg.model.append_nvd_url(cve, urls),
+                'urls': odg.model.append_nvd_url(cve, list(data.get('urls') or [])),
             }
         elif row_type == odg.model.Datatype.RESCORING:
             data = {
