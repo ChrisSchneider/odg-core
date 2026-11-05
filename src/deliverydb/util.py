@@ -17,6 +17,14 @@ import odg.model
 import util
 
 
+def _backfill_cvss_score_in_data(data: dict | None) -> dict | None:
+    if not isinstance(data, dict):
+        return data
+    if data.get('cvss_score') is not None or data.get('cvss_v3_score') is None:
+        return data
+    return {**data, 'cvss_score': odg.model.backfill_cvss_score(None, data['cvss_v3_score'])}
+
+
 def to_db_artefact_metadata(
     artefact_metadata: odg.model.ArtefactMetadata,
 ) -> dm.ArtefactMetaData:
@@ -65,6 +73,7 @@ def to_db_artefact_metadata(
 def db_artefact_metadata_to_dict(
     artefact_metadata: dm.ArtefactMetaData,
 ) -> dict:
+    meta = artefact_metadata.meta or {}
     return {
         'artefact': {
             'component_name': artefact_metadata.component_name,
@@ -76,9 +85,15 @@ def db_artefact_metadata_to_dict(
                 'artefact_type': artefact_metadata.artefact_type,
                 'artefact_extra_id': artefact_metadata.artefact_extra_id,
             },
+            'references': [],
         },
-        'meta': artefact_metadata.meta,
-        'data': artefact_metadata.data,
+        'meta': {
+            **meta,
+            'assignee_mode': meta.get('assignee_mode'),
+            'last_update': meta.get('last_update'),
+            'responsibles': meta.get('responsibles'),
+        },
+        'data': _backfill_cvss_score_in_data(artefact_metadata.data),
         'discovery_date': (
             artefact_metadata.discovery_date.isoformat()
             if artefact_metadata.discovery_date

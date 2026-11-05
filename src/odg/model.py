@@ -536,6 +536,10 @@ class VulnerabilityFinding(Finding):
         return _as_key(self.package_name, self.package_version, self.cve)
 
 
+def backfill_cvss_score(cvss_score: float | None, cvss_v3_score: float | None) -> float | None:
+    return cvss_v3_score if cvss_score is None else cvss_score
+
+
 @dataclasses.dataclass
 class BDBAVulnerabilityFinding(VulnerabilityFinding, BDBAMixin):
     cvss_v3_score: typing.Annotated[
@@ -544,8 +548,7 @@ class BDBAVulnerabilityFinding(VulnerabilityFinding, BDBAMixin):
     ] = None
 
     def __post_init__(self):
-        if self.cvss_score is None and self.cvss_v3_score is not None:
-            self.cvss_score = self.cvss_v3_score
+        self.cvss_score = backfill_cvss_score(self.cvss_score, self.cvss_v3_score)
         super().__post_init__()
 
 
