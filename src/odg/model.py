@@ -1015,6 +1015,7 @@ class CustomRescoring:
 
     finding: (
         RescoringVulnerabilityFinding
+        | RescoringIPFinding
         | RescoringLicenseFinding
         | MalwareFindingDetails
         | RescoreSastFinding
@@ -1025,7 +1026,6 @@ class CustomRescoring:
         | RescoringFalcoFinding
         | RescoringKyvernoFinding
         | RescoreGitHubSecretFinding
-        | RescoringIPFinding
     )
     referenced_type: str
     severity: str
@@ -1068,6 +1068,7 @@ class SlaViolationTraceEntry:
 class SlaViolation:
     finding: (
         RescoringVulnerabilityFinding
+        | RescoringIPFinding
         | RescoringLicenseFinding
         | MalwareFindingDetails
         | RescoreSastFinding
@@ -1078,7 +1079,6 @@ class SlaViolation:
         | RescoringFalcoFinding
         | RescoringKyvernoFinding
         | RescoreGitHubSecretFinding
-        | RescoringIPFinding
     )
     referenced_type: str
     severity: str

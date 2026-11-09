@@ -1,16 +1,15 @@
-import dataclasses
 import datetime
 import enum
 
 import dacite
 
 import odg.model
-from odg.model import ArtefactMetadata, MatchCondition
+import util
 
 
-def _from_dict_dacite(raw: dict) -> ArtefactMetadata:
+def _from_dict_dacite(raw: dict) -> odg.model.ArtefactMetadata:
     return dacite.from_dict(
-        data_class=ArtefactMetadata,
+        data_class=odg.model.ArtefactMetadata,
         data=raw,
         config=dacite.Config(
             type_hooks={
@@ -19,24 +18,11 @@ def _from_dict_dacite(raw: dict) -> ArtefactMetadata:
             },
             cast=[
                 enum.StrEnum,
-                MatchCondition,
+                odg.model.MatchCondition,
             ],
             strict=True,
         ),
     )
-
-
-def _normalize(value):
-    """Recursively convert dataclasses and enums to plain dicts/primitives for comparison."""
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return {f.name: _normalize(getattr(value, f.name)) for f in dataclasses.fields(value)}
-    if isinstance(value, enum.Enum):
-        return value.value
-    if isinstance(value, dict):
-        return {k: _normalize(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_normalize(item) for item in value]
-    return value
 
 
 def _artefact_envelope(meta_type: str, data: dict) -> dict:
@@ -121,7 +107,9 @@ class TestFromDictMatchesDacite:
     """Verify mashumaro from_dict produces identical output to the original dacite implementation."""
 
     def _assert_matches(self, raw: dict):
-        assert _normalize(_from_dict_dacite(raw)) == _normalize(ArtefactMetadata.from_dict(raw))
+        dacite_result = util.dict_serialisation(_from_dict_dacite(raw))
+        mashumaro_result = util.dict_serialisation(odg.model.ArtefactMetadata.from_dict(raw))
+        assert dacite_result == mashumaro_result
 
     def test_bdba_vulnerability_with_cvss(self):
         # Dominant shape in production: BDBAVulnerabilityFinding with full CVSS struct.
@@ -277,7 +265,9 @@ class TestFromDictSinglePath:
     """
 
     def _assert_matches(self, raw: dict):
-        assert _normalize(_from_dict_dacite(raw)) == _normalize(ArtefactMetadata.from_dict(raw))
+        dacite_result = util.dict_serialisation(_from_dict_dacite(raw))
+        mashumaro_result = util.dict_serialisation(odg.model.ArtefactMetadata.from_dict(raw))
+        assert dacite_result == mashumaro_result
 
     def test_vulnerability_finding_all_meta_fields(self):
         raw = _artefact_envelope(
@@ -364,7 +354,7 @@ class TestRescoringUserFallback:
                 'matching_rules': ['finding-update'],
             },
         )
-        result = ArtefactMetadata.from_dict(raw)
+        result = odg.model.ArtefactMetadata.from_dict(raw)
         assert type(result.data.user) is odg.model.User
         assert result.data.user.username == 'bdba-extension-auto-rescoring'
         assert result.data.user.type == 'bdba-extension-user'
@@ -400,7 +390,42 @@ class TestRescoringUserFallback:
                     'user': user_raw,
                 },
             )
-            result = ArtefactMetadata.from_dict(raw)
+            result = odg.model.ArtefactMetadata.from_dict(raw)
             assert type(result.data.user) is expected_type, (
                 f'expected {expected_type.__name__} for type={user_raw["type"]!r}'
             )
+
+
+class TestDiscoveryDateDecoding:
+    def test_plain_date_string_decoded_to_date(self):
+        raw = _artefact_envelope(
+            odg.model.Datatype.VULNERABILITY_FINDING,
+            {'package_name': 'curl', 'package_version': '8.0.0', 'severity': 'LOW', 'cve': 'CVE-1'},
+        )
+        result = odg.model.ArtefactMetadata.from_dict(raw)
+        assert result.discovery_date == datetime.date(2025, 1, 1)
+        assert isinstance(result.discovery_date, datetime.date)
+
+
+class TestRescoringIPFindingDecoding:
+    def test_ip_finding_with_license_preserves_labels(self):
+        # IP findings with a license must decode to RescoringIPFinding, not RescoringLicenseFinding.
+        raw = _artefact_envelope(
+            odg.model.Datatype.RESCORING,
+            {
+                'finding': {
+                    'package_name': 'openssl',
+                    'license': {'name': 'OpenSSL'},
+                    'labels': ['label-a', 'label-b'],
+                },
+                'referenced_type': 'finding/ip',
+                'severity': 'LOW',
+                'user': {'username': 'jdoe', 'type': 'github-user', 'github_hostname': 'github.com'},
+            },
+        )
+        result = odg.model.ArtefactMetadata.from_dict(raw)
+        assert isinstance(result.data, odg.model.CustomRescoring)
+        assert isinstance(result.data.finding, odg.model.RescoringIPFinding)
+        assert result.data.finding.labels == ['label-a', 'label-b']
+        assert result.data.finding.license is not None
+        assert result.data.finding.license.name == 'OpenSSL'
