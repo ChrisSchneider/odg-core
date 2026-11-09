@@ -429,3 +429,38 @@ class TestRescoringIPFindingDecoding:
         assert result.data.finding.labels == ['label-a', 'label-b']
         assert result.data.finding.license is not None
         assert result.data.finding.license.name == 'OpenSSL'
+
+
+class TestRescoringUserUnionResolution:
+    """Mashumaro and dacite must agree on user union resolution regardless of type field value."""
+
+    def _rescoring_raw(self, user_raw: dict) -> dict:
+        return _artefact_envelope(
+            odg.model.Datatype.RESCORING,
+            {
+                'finding': {'package_name': 'openssl', 'cve': 'CVE-2023-0286'},
+                'referenced_type': 'finding/vulnerability',
+                'severity': 'LOW',
+                'user': user_raw,
+            },
+        )
+
+    def test_unknown_type_with_issuer_resolves_to_oidc_user(self):
+        # issuer presence drives OidcUser selection; type value is irrelevant to both libraries.
+        raw = self._rescoring_raw(
+            {'username': 'alice', 'type': 'extension-user', 'issuer': 'https://example.com'},
+        )
+        dacite_result = _from_dict_dacite(raw)
+        mashumaro_result = odg.model.ArtefactMetadata.from_dict(raw)
+        assert isinstance(dacite_result.data.user, odg.model.OidcUser)
+        assert isinstance(mashumaro_result.data.user, odg.model.OidcUser)
+        assert dacite_result.data.user.key == mashumaro_result.data.user.key
+
+    def test_oidc_type_without_issuer_falls_back_to_user(self):
+        # Without issuer, OidcUser construction fails; both libraries fall through to User.
+        raw = self._rescoring_raw({'username': 'alice', 'type': 'oidc-user'})
+        dacite_result = _from_dict_dacite(raw)
+        mashumaro_result = odg.model.ArtefactMetadata.from_dict(raw)
+        assert type(dacite_result.data.user) is odg.model.User
+        assert type(mashumaro_result.data.user) is odg.model.User
+        assert dacite_result.data.user.key == mashumaro_result.data.user.key
